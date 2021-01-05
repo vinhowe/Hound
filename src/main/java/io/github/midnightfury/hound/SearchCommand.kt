@@ -37,22 +37,26 @@ class SearchCommand : TabExecutor {
         return mutableListOf()
 
     }
-    fun getBlocks(start: Block, radius: Int): ArrayList<Block>? {
-        val blocks = ArrayList<Block>()
-        var x = start.location.x - radius
-        while (x <= start.location.x + radius) {
-            var y = start.location.y - radius
-            while (y <= start.location.y + radius) {
-                var z = start.location.z - radius
-                while (z <= start.location.z + radius) {
-                    val loc = Location(start.world, x, y, z)
-                    blocks.add(loc.block)
-                    z++
+
+    fun getChestsInRadius(start: Block, radius: Int): List<Chest> {
+        val startLocation = start.location
+        val chests = mutableListOf<Chest>()
+
+        for (x in -radius..radius) {
+            for (y in -radius..radius) {
+                for (z in -radius..radius) {
+                    val blockLocation =
+                        Location(start.world, startLocation.x + x, startLocation.y + y, startLocation.z + z)
+
+                    if (blockLocation.block.type != Material.CHEST) {
+                        continue
+                    }
+
+                    chests.add(blockLocation.block as Chest)
                 }
-                y++
             }
-            x++
         }
-        return blocks
+
+        return chests
     }
 }
