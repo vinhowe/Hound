@@ -1,0 +1,6 @@
+name: Hound
+version: @version@
+main: io.github.midnightfury.hound.Hound
+api-version: 1.16
+authors: [ Midnightfury, vinhowe ]
+description: Find chests
