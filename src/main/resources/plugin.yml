@@ -7,6 +7,11 @@ description: Find chests
 depend:
   - ProtocolLib
 commands:
-  buttonglow:
-    usage: /<command>
-    description: lol
+  hound:
+    usage: /<command> <item>
+    description: locate an item in a chest
+    aliases: [ cf, search]
+permissions:
+  hound.*:
+    default: op
+    description: Give players with op everything by default
