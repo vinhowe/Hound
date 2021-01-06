@@ -6,19 +6,18 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabExecutor
 import org.bukkit.entity.Player
-import org.bukkit.Location.*;
 import org.bukkit.block.Block
-import java.util.ArrayList
+import org.bukkit.block.Chest
 
-
-
-
-class SearchCommand : TabExecutor {
+class FindChestsCommand : TabExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        val player = sender as Player
-        val list: MutableList<String>
-        val location = player.location;
-        return true
+        if (sender !is Player) {
+            sender.sendMessage("§4You must be an in-game player to use this command.")
+            return true
+        }
+
+        getChestsInRadius()
+        return false
     }
 
     override fun onTabComplete(
