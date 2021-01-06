@@ -1,6 +1,12 @@
 name: Hound
-version: @version@
+version: 0.1.0
 main: io.github.midnightfury.hound.Hound
 api-version: 1.16
 authors: [ Midnightfury, vinhowe ]
 description: Find chests
+depend:
+  - ProtocolLib
+commands:
+  buttonglow:
+    usage: /<command>
+    description: lol
