@@ -1,10 +1,7 @@
-package io.github.midnightfury.hound
-
-import com.comphenix.protocol.PacketType
-import org.bukkit.Material
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.inventory.BlockInventoryHolder
 
 class Events(private val hound: Hound) : Listener {
     @EventHandler
@@ -13,9 +10,9 @@ class Events(private val hound: Hound) : Listener {
             return
         }
         val player = event.player
-        if (event.clickedBlock?.type != Material.CHEST) {
+        if (event.clickedBlock?.state !is BlockInventoryHolder) {
             return
         }
-        hound.clearChestHighlightsForPlayer(player)
+        hound.clearContainerHighlightsForPlayer(player)
     }
 }

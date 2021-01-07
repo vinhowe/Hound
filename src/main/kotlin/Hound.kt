@@ -1,10 +1,8 @@
-package io.github.midnightfury.hound;
-
 import com.comphenix.protocol.PacketType
 import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
 import org.bukkit.entity.Player
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.java.JavaPlugin
 import java.util.*
 
 class Hound : JavaPlugin() {
@@ -13,8 +11,8 @@ class Hound : JavaPlugin() {
 
     override fun onEnable() {
         // Plugin startup logic
-        protocolManager = ProtocolLibrary.getProtocolManager();
-        val findChestsCommand = FindChestsCommand(this);
+        protocolManager = ProtocolLibrary.getProtocolManager()
+        val findChestsCommand = FindContainersCommand(this)
         getCommand("hound")?.setExecutor(findChestsCommand)
         getCommand("hound")?.tabCompleter = findChestsCommand
         server.pluginManager.registerEvents(Events(this), this)
@@ -24,7 +22,7 @@ class Hound : JavaPlugin() {
         // Plugin shutdown logic
     }
 
-    fun clearChestHighlightsForPlayer(player: Player) {
+    fun clearContainerHighlightsForPlayer(player: Player) {
         if (!(playerHighlightMap.containsKey(player.uniqueId)) || playerHighlightMap[player.uniqueId]?.isEmpty() != false) {
             return
         }
