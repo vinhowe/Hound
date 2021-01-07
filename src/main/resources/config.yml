@@ -1,0 +1,3 @@
+search-radius: 20
+# Duration highlight markers are visible in seconds
+highlight-duration: 20.0

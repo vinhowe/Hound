@@ -8,10 +8,19 @@ import java.util.*
 class Hound : JavaPlugin() {
     val playerHighlightMap = mutableMapOf<UUID, MutableList<Int>>()
     lateinit var protocolManager: ProtocolManager
+    val searchRadius: Int
+        get() {
+            return (config.get("search-radius") as Int?)!!
+        }
+    val highlightDuration: Number
+        get() {
+            return (config.get("highlight-duration") as Number?)!!
+        }
 
     override fun onEnable() {
         // Plugin startup logic
         protocolManager = ProtocolLibrary.getProtocolManager()
+        saveDefaultConfig()
         val findChestsCommand = FindContainersCommand(this)
         getCommand("hound")?.setExecutor(findChestsCommand)
         getCommand("hound")?.tabCompleter = findChestsCommand

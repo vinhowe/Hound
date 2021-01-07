@@ -39,14 +39,14 @@ class FindContainersCommand(private val hound: Hound) : TabExecutor {
             }
         }
 
-        val radius = 15
+        val radius = hound.searchRadius
         val containers = getContainersInRadius(sender.location, radius)
         val filteredContainers = filterContainersByMaterial(containers, material)
         if (filteredContainers.isEmpty()) {
             sender.sendMessage(
                 "§cCouldn't find '${
                     material.toString().toLowerCase()
-                }' in a container within $radius blocks of you."
+                }' in a container within $radius ${if (radius == 1) "block" else "blocks"} of you."
             )
             return true
         }
@@ -130,7 +130,7 @@ class FindContainersCommand(private val hound: Hound) : TabExecutor {
             destroyHighlighter.integerArrays.write(0, listOf(rand).toIntArray())
             hound.protocolManager.sendServerPacket(player, destroyHighlighter)
             hound.playerHighlightMap[playerUuid]?.remove(rand)
-        }, 20 * 20L)
+        }, (hound.highlightDuration.toDouble() * 20).toLong())
     }
 
     override fun onTabComplete(
