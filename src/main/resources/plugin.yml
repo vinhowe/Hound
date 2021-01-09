@@ -9,8 +9,12 @@ depend:
 commands:
   hound:
     usage: /<command> <item>
-    description: locate an item in a chest
-    aliases: [ cf, search]
+    description: Highlight item in nearby containers.
+    aliases: [ cf, search ]
+  lhound:
+    usage: /<command> [on|off]
+    description: Live search mode. While active, highlights item held in main hand in nearby containers.
+    aliases: [ lcf, lsearch ]
 permissions:
   hound.*:
     default: op
