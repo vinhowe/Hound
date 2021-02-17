@@ -108,6 +108,13 @@ class Hound : JavaPlugin() {
         return containers.filter { it.inventory.contains(material) }
     }
 
+    private fun filterContainersByMaterials(
+        containers: List<BlockInventoryHolder>,
+        materials: List<Material>
+    ): List<BlockInventoryHolder> {
+        return containers.filter { container -> materials.any { container.inventory.contains(it) } }
+    }
+
     private fun getContainersInRadius(start: Location, radius: Int): List<BlockInventoryHolder> {
         val containers = mutableListOf<BlockInventoryHolder>()
 
@@ -130,18 +137,14 @@ class Hound : JavaPlugin() {
         return containers
     }
 
-    fun highlightItemTypeForPlayer(
-        material: Material,
+    fun highlightItemTypesForPlayer(
+        materials: List<Material>,
         player: Player,
         radius: Int = searchRadius,
         duration: Double? = highlightDuration.toDouble()
     ): Boolean {
-        if (material == Material.AIR) {
-            return false
-        }
-
         val containers = getContainersInRadius(player.location, radius)
-        val filteredContainers = filterContainersByMaterial(containers, material)
+        val filteredContainers = filterContainersByMaterials(containers, materials)
 
         if (filteredContainers.isEmpty()) {
             return false
@@ -153,5 +156,14 @@ class Hound : JavaPlugin() {
             highlightBlock(player, loc, duration)
         }
         return true
+    }
+
+    fun highlightItemTypeForPlayer(
+        material: Material,
+        player: Player,
+        radius: Int = searchRadius,
+        duration: Double? = highlightDuration.toDouble()
+    ): Boolean {
+        return highlightItemTypesForPlayer(listOf(material), player, radius, duration)
     }
 }

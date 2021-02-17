@@ -37,8 +37,8 @@ class HoundEvents(private val hound: Hound) : Listener {
             GlobalScope.launch {
                 liveSearchFlow.collect { material ->
                     hound.server.scheduler.runTask(hound, Runnable {
-                        if (!hound.highlightItemTypeForPlayer(
-                                material,
+                        if (!hound.highlightItemTypesForPlayer(
+                                listOf(material),
                                 player
                             )
                         ) {
@@ -46,7 +46,7 @@ class HoundEvents(private val hound: Hound) : Listener {
                         }
                     })
                 }
-                while(true) {
+                while (true) {
                     delay(1000)
                     if (player.uniqueId !in hound.liveSearchSet) {
                         cancel()

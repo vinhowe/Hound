@@ -18,26 +18,24 @@ class SearchCommand(private val hound: Hound) : TabExecutor {
             return false
         }
 
-        val material: Material
+        val materials: MutableList<Material> = mutableListOf()
         if (args.size == 1) {
-            if (enumValues<Material>().none { it.name == args[0].toUpperCase() }) {
-                sender.sendMessage("§c'${args[0].toLowerCase()}' is not a valid item type.")
-                return true
-            }
-            material = Material.valueOf(args[0].toUpperCase())
+            // Search for all items whose names contain the argument string
+            materials += Material.values().filter { it.name.contains(args[0], true) }
         } else {
-            material = sender.inventory.itemInMainHand.type
-            if (material.isAir) {
+            if (sender.inventory.itemInMainHand.type.isAir) {
                 sender.sendMessage("§cCouldn't find anything in selected slot.")
                 return true
             }
+            materials += sender.inventory.itemInMainHand.type
         }
 
         val radius = hound.searchRadius
-        if (!hound.highlightItemTypeForPlayer(material, sender)) {
+        if (!hound.highlightItemTypesForPlayer(materials, sender)) {
             sender.sendMessage(
-                "§cCouldn't find '${
-                    material.toString().toLowerCase()
+                "§cCouldn't find items matching '${
+                    if (args.size == 1) args[0].toLowerCase() else sender.inventory.itemInMainHand.type.toString()
+                        .toLowerCase()
                 }' in a container within $radius ${if (radius == 1) "block" else "blocks"} of you."
             )
         }
