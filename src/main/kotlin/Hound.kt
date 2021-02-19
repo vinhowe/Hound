@@ -1,22 +1,27 @@
-import com.comphenix.protocol.PacketType
-import com.comphenix.protocol.ProtocolLibrary
-import com.comphenix.protocol.ProtocolManager
-import com.comphenix.protocol.wrappers.WrappedDataWatcher
+import com.google.common.collect.ImmutableMap
+import com.mojang.serialization.MapCodec
 import kotlinx.coroutines.flow.MutableSharedFlow
-import org.bukkit.Bukkit
-import org.bukkit.Location
-import org.bukkit.Material
-import org.bukkit.entity.EntityType
+import org.bukkit.*
+import org.bukkit.block.Block
+import org.bukkit.block.DoubleChest
+import org.bukkit.craftbukkit.v1_16_R3.CraftWorld
+import org.bukkit.craftbukkit.v1_16_R3.entity.CraftPlayer
+import org.bukkit.craftbukkit.v1_16_R3.util.CraftVector
 import org.bukkit.entity.Player
 import org.bukkit.inventory.BlockInventoryHolder
+import org.bukkit.inventory.DoubleChestInventory
+import org.bukkit.inventory.Inventory
 import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.util.Vector
 import java.util.*
+import kotlin.math.*
 
 class Hound : JavaPlugin() {
-    private val playerHighlightMap = mutableMapOf<UUID, MutableList<Int>>()
+    private val staticPlayerHighlightMap = mutableMapOf<UUID, MutableList<Int>>()
     val liveSearchSet = mutableSetOf<UUID>()
     val liveSearchEventFlows = mutableMapOf<UUID, MutableSharedFlow<Material>>()
-    lateinit var protocolManager: ProtocolManager
+    private val guidePlayerMap = mutableMapOf<UUID, PlayerGuideData>()
+
     val searchRadius: Int
         get() {
             return (config.get("search-radius") as Int?)!!
@@ -26,97 +31,287 @@ class Hound : JavaPlugin() {
             return (config.get("highlight-duration") as Number?)!!
         }
 
+    private val MAX_VISIBLE_STATIC_HIGHLIGHTS = 1000
+    private val GUIDE_DISTANCE = 10.0
+    private val GUIDE_DISTANCE_VELOCITY_COEFF = 10.0
+    private val GUIDE_RISE_DISTANCE = 8.0
+    private val GUIDE_ASCENT_LENGTH = 200.0
+
     override fun onEnable() {
-        protocolManager = ProtocolLibrary.getProtocolManager()
+        super.onEnable()
         saveDefaultConfig()
-        val searchCommand = SearchCommand(this)
-        val liveSearchCommand = LiveSearchCommand(this)
-        getCommand("hound")?.setExecutor(searchCommand)
-        getCommand("hound")?.tabCompleter = searchCommand
-        getCommand("lhound")?.setExecutor(liveSearchCommand)
-        getCommand("lhound")?.tabCompleter = liveSearchCommand
+        val chestSearchCommand = ChestSearchCommand(this)
+        val liveChestSearchCommand = LiveChestSearchCommand(this)
+        val blockSearchCommand = BlockSearchCommand(this)
+        val targetCommand = TargetCommand(this)
+        getCommand("chound")?.setExecutor(chestSearchCommand)
+        getCommand("chound")?.tabCompleter = chestSearchCommand
+        getCommand("lhound")?.setExecutor(liveChestSearchCommand)
+        getCommand("lhound")?.tabCompleter = liveChestSearchCommand
+        getCommand("bhound")?.setExecutor(blockSearchCommand)
+        getCommand("bhound")?.tabCompleter = blockSearchCommand
+        getCommand("target")?.setExecutor(targetCommand)
         server.pluginManager.registerEvents(HoundEvents(this), this)
     }
 
-    fun clearContainerHighlightsForPlayer(player: Player) {
-        if (!(playerHighlightMap.containsKey(player.uniqueId)) || playerHighlightMap[player.uniqueId]?.isEmpty() != false) {
-            return
-        }
-        val destroyHighlighter = protocolManager.createPacket(PacketType.Play.Server.ENTITY_DESTROY)
-        destroyHighlighter.integerArrays.write(0, playerHighlightMap[player.uniqueId]?.toIntArray())
-        protocolManager.sendServerPacket(player, destroyHighlighter)
-        playerHighlightMap[player.uniqueId]?.clear()
+    override fun onDisable() {
+        super.onDisable()
+        clearAllStaticHighlights()
+        clearAllGuides()
+        clearAllLiveHighlights()
     }
 
-    fun highlightBlock(player: Player, location: Location, duration: Double?) {
-        val playerUuid = player.uniqueId
-
-        if (!playerHighlightMap.containsKey(playerUuid)) {
-            playerHighlightMap[playerUuid] = mutableListOf()
+    fun clearStaticHighlightsForPlayer(player: OfflinePlayer, sendPacket: Boolean = true) {
+        if (!staticPlayerHighlightMap.containsKey(player.uniqueId) || staticPlayerHighlightMap[player.uniqueId]!!.isEmpty() || player !is CraftPlayer) {
+            return
         }
 
-        val highlightEntityId = (Math.random() * Integer.MAX_VALUE).toInt()
-        val highlightUuid = UUID.randomUUID()
+        if (sendPacket) {
+            val destroyHighlighterPacket =
+                net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(
+                    *staticPlayerHighlightMap[player.uniqueId]!!.toTypedArray().toIntArray()
+                )
+            player.handle.playerConnection.sendPacket(destroyHighlighterPacket)
+        }
 
-        playerHighlightMap[playerUuid]?.add(highlightEntityId)
+        staticPlayerHighlightMap.remove(player.uniqueId)
+    }
 
-        val spawnHighlightPacket = protocolManager.createPacket(PacketType.Play.Server.SPAWN_ENTITY)
-        spawnHighlightPacket.integers
-            .write(0, highlightEntityId) // EID
-            .write(1, 0) // speed x
-            .write(2, 0) // speed y
-            .write(3, 0) // speed z
-            .write(4, 0) // pitch
-            .write(5, 0) // yaw
-            .write(6, 0) // data
-        spawnHighlightPacket.uuiDs.write(0, highlightUuid)
-        // location
-        spawnHighlightPacket.doubles.write(0, location.x + 0.5).write(1, location.y + 0.21).write(2, location.z + 0.5)
-        spawnHighlightPacket.entityTypeModifier.write(0, EntityType.SHULKER_BULLET)
+    fun clearGuideForPlayer(player: OfflinePlayer) {
+        if (!guidePlayerMap.containsKey(player.uniqueId)) {
+            return
+        }
 
-        val setHighlightGlowingPacket = protocolManager.createPacket(PacketType.Play.Server.ENTITY_METADATA)
-        setHighlightGlowingPacket.integers.write(0, highlightEntityId)
-        val watcher = WrappedDataWatcher()
-        val serializer = WrappedDataWatcher.Registry.get(Byte::class.javaObjectType)
-        watcher.setObject(0, serializer, (0x40 or 0x20).toByte())
-        val noGravity = WrappedDataWatcher.WrappedDataWatcherObject(
-            5,
-            WrappedDataWatcher.Registry.get(Boolean::class.javaObjectType)
-        )
-        watcher.setObject(noGravity, true)
-        setHighlightGlowingPacket.watchableCollectionModifier.write(0, watcher.watchableObjects)
+        val guideData = guidePlayerMap[player.uniqueId]!!
 
-        protocolManager.sendServerPacket(player, spawnHighlightPacket)
-        protocolManager.sendServerPacket(player, setHighlightGlowingPacket)
+        if (player is Player) {
+            val highlightEntity = guideData.highlightEntity
+            destroyHighlight(highlightEntity, player)
+        }
+
+        Bukkit.getServer().scheduler.cancelTask(guideData.runnableId)
+
+        guidePlayerMap.remove(player.uniqueId)
+    }
+
+    fun clearLiveSearchForPlayer(player: OfflinePlayer) {
+        if (!liveSearchSet.contains(player.uniqueId)) {
+            return
+        }
+
+        liveSearchSet.remove(player.uniqueId)
+        liveSearchEventFlows.remove(player.uniqueId)
+    }
+
+    fun clearAllStaticHighlights() {
+        for ((uuid, _) in staticPlayerHighlightMap) {
+            val player = Bukkit.getPlayer(uuid) ?: Bukkit.getOfflinePlayer(uuid)
+            clearStaticHighlightsForPlayer(player, player is Player)
+        }
+    }
+
+    fun clearAllGuides() {
+        for ((uuid, _) in guidePlayerMap) {
+            val player = Bukkit.getPlayer(uuid) ?: Bukkit.getOfflinePlayer(uuid)
+            clearGuideForPlayer(player)
+        }
+    }
+
+    fun clearAllLiveHighlights() {
+        for (uuid in liveSearchSet) {
+            val player = Bukkit.getPlayer(uuid) ?: Bukkit.getOfflinePlayer(uuid)
+            clearLiveSearchForPlayer(player)
+        }
+    }
+
+    private fun destroyHighlight(entity: net.minecraft.server.v1_16_R3.Entity, player: Player) {
+        val destroyHighlighterPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(entity.id)
+        (player as CraftPlayer).handle.playerConnection.sendPacket(destroyHighlighterPacket)
+    }
+
+    private fun createHighlight(entity: net.minecraft.server.v1_16_R3.Entity, player: Player) {
+        val highlightSpawnPacket = net.minecraft.server.v1_16_R3.PacketPlayOutSpawnEntity(entity)
+        val highlightMetadataPacket =
+            net.minecraft.server.v1_16_R3.PacketPlayOutEntityMetadata(entity.id, entity.dataWatcher, true)
+
+        (player as CraftPlayer).handle.playerConnection.sendPacket(highlightSpawnPacket)
+        player.handle.playerConnection.sendPacket(highlightMetadataPacket)
+    }
+
+    private fun registerTemporaryStaticHighlightForPlayer(
+        entity: net.minecraft.server.v1_16_R3.Entity,
+        player: Player,
+        duration: Double?
+    ) {
+        if (!staticPlayerHighlightMap.containsKey(player.uniqueId)) {
+            staticPlayerHighlightMap[player.uniqueId] = mutableListOf()
+        }
+
+        staticPlayerHighlightMap[player.uniqueId]?.add(entity.id)
 
         if (duration == null) {
             return
         }
 
         Bukkit.getServer().scheduler.scheduleSyncDelayedTask(this, {
-            val destroyHighlighter = protocolManager.createPacket(PacketType.Play.Server.ENTITY_DESTROY)
-            destroyHighlighter.integerArrays.write(0, listOf(highlightEntityId).toIntArray())
-            protocolManager.sendServerPacket(player, destroyHighlighter)
-            playerHighlightMap[playerUuid]?.remove(highlightEntityId)
+            destroyHighlight(entity, player)
+            staticPlayerHighlightMap[player.uniqueId]?.remove(entity.id)
         }, (duration * 20).toLong())
     }
 
-    private fun filterContainersByMaterial(
-        containers: List<BlockInventoryHolder>,
-        material: Material
-    ): List<BlockInventoryHolder> {
-        return containers.filter { it.inventory.contains(material) }
+    fun cubeHighlightEntity(
+        player: Player,
+        location: Location,
+    ): net.minecraft.server.v1_16_R3.Entity {
+        val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
+        val highlightEntity = net.minecraft.server.v1_16_R3.EntityWitherSkull(
+            net.minecraft.server.v1_16_R3.EntityTypes.WITHER_SKULL,
+            (player.world as CraftWorld).handle
+        )
+        highlightEntity.isInvulnerable = true
+        highlightEntity.setPositionRaw(highlightLocation.x, highlightLocation.y, highlightLocation.z)
+        highlightEntity.isNoGravity = true
+        // i -> setGlowing
+        highlightEntity.i(true)
+
+        return highlightEntity
     }
 
-    private fun filterContainersByMaterials(
-        containers: List<BlockInventoryHolder>,
-        materials: List<Material>
-    ): List<BlockInventoryHolder> {
-        return containers.filter { container -> materials.any { container.inventory.contains(it) } }
+    fun circleHighlightEntity(
+        player: Player,
+        location: Location,
+    ): net.minecraft.server.v1_16_R3.Entity {
+        val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
+        val highlightEntity =
+            net.minecraft.server.v1_16_R3.EntityEnderSignal(
+                (player.world as CraftWorld).handle,
+                highlightLocation.x,
+                highlightLocation.y,
+                highlightLocation.z,
+            )
+        highlightEntity.isNoGravity = true
+        // i -> setGlowing
+        highlightEntity.i(true)
+
+        return highlightEntity
     }
 
-    private fun getContainersInRadius(start: Location, radius: Int): List<BlockInventoryHolder> {
-        val containers = mutableListOf<BlockInventoryHolder>()
+    fun shulkerBulletHighlightEntity(
+        player: Player,
+        location: Location,
+    ): net.minecraft.server.v1_16_R3.Entity {
+        val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
+        val highlightEntity =
+            net.minecraft.server.v1_16_R3.EntityShulkerBullet(
+                net.minecraft.server.v1_16_R3.EntityTypes.SHULKER_BULLET,
+                (player.world as CraftWorld).handle
+            )
+        highlightEntity.setPosition(highlightLocation.x, highlightLocation.y, highlightLocation.z)
+        highlightEntity.isNoGravity = true
+        highlightEntity.isInvulnerable = true
+        // i -> setGlowing
+        highlightEntity.i(true)
+
+        return highlightEntity
+    }
+
+    private fun searchContainersForExactMatches(
+        material: Material,
+        containers: List<Inventory>
+    ): ExactMatchingContainersSearchResult {
+        var itemCount = 0
+        val matches: MutableList<Inventory> = mutableListOf()
+        containers.forEach { container ->
+            var match = false
+            for (item in container) {
+                if (item == null || item.type != material) {
+                    continue
+                }
+
+                itemCount += item.amount
+
+                if (match) {
+                    continue
+                }
+
+                matches += container
+                match = true
+            }
+        }
+        return ExactMatchingContainersSearchResult(matches, itemCount)
+    }
+
+    private fun searchContainersForPartialMatches(
+        exactMatchMaterial: Material?,
+        partialMatchMaterials: List<Material>,
+        containers: List<Inventory>,
+    ): PartialMatchingContainersSearchResult {
+        var exactMatchItemCount = 0
+        var partialMatchItemCount = 0
+        val exactMatches: MutableList<Inventory> = mutableListOf()
+        val partialMatches: MutableList<Inventory> = mutableListOf()
+
+        containers.forEach { container ->
+            // Each matching container is either an exact match or a partial match, but not both
+            var containerExactMatch = false
+            var containerPartialMatch = false
+            for (item in container) {
+                if (item == null) {
+                    continue
+                }
+
+                if (item.type == exactMatchMaterial) {
+                    exactMatchItemCount += item.amount
+                    if (!containerExactMatch) {
+                        exactMatches += container
+                        containerExactMatch = true
+                        if (containerPartialMatch) {
+                            partialMatches -= container
+                        }
+                    }
+                    continue
+                }
+
+                if (item.type in partialMatchMaterials) {
+                    partialMatchItemCount += item.amount
+                    if (!containerPartialMatch && !containerExactMatch) {
+                        containerPartialMatch = true
+                        partialMatches += container
+                    }
+                }
+            }
+        }
+
+        return PartialMatchingContainersSearchResult(
+            exactMatches,
+            partialMatches,
+            exactMatchItemCount,
+            partialMatchItemCount
+        )
+    }
+
+    private fun blocksOfTypeInRadius(material: Material, start: Location, radius: Int): List<Block> {
+        val blocks = mutableListOf<Block>()
+
+        for (x in -radius..radius) {
+            for (y in -radius..radius) {
+                for (z in -radius..radius) {
+                    val block =
+                        Location(start.world, start.x + x, start.y + y, start.z + z).block
+                    if (block.type != material) {
+                        continue
+                    }
+
+                    blocks.add(block)
+                }
+            }
+        }
+
+        return blocks
+    }
+
+    private fun containersInRadius(start: Location, radius: Int): List<Inventory> {
+        val containers = mutableListOf<Inventory>()
 
         for (x in -radius..radius) {
             for (y in -radius..radius) {
@@ -129,7 +324,22 @@ class Hound : JavaPlugin() {
                         continue
                     }
 
-                    containers.add(blockState)
+                    val blockData = blockState.blockData
+                    if (blockData is org.bukkit.block.data.type.Chest && blockData.type != org.bukkit.block.data.type.Chest.Type.SINGLE) {
+                        if (blockState.inventory !is DoubleChestInventory || blockState.inventory.holder !is DoubleChest) {
+                            continue
+                        }
+                        containers.add(
+                            when (blockData.type) {
+                                org.bukkit.block.data.type.Chest.Type.LEFT -> (blockState.inventory as DoubleChestInventory).leftSide
+                                org.bukkit.block.data.type.Chest.Type.RIGHT -> (blockState.inventory as DoubleChestInventory).rightSide
+                                else -> continue
+                            }
+                        )
+                        continue
+                    }
+
+                    containers.add(blockState.inventory)
                 }
             }
         }
@@ -137,25 +347,43 @@ class Hound : JavaPlugin() {
         return containers
     }
 
-    fun highlightItemTypesForPlayer(
-        materials: List<Material>,
+    fun highlightPartialMatchingItemTypesForPlayer(
+        exactMatchMaterial: Material?,
+        partialMatchMaterials: List<Material>,
         player: Player,
         radius: Int = searchRadius,
         duration: Double? = highlightDuration.toDouble()
-    ): Boolean {
-        val containers = getContainersInRadius(player.location, radius)
-        val filteredContainers = filterContainersByMaterials(containers, materials)
+    ): PartialMatchingContainersSearchResult? {
+        val containers = containersInRadius(player.location, radius)
+        val searchResult = searchContainersForPartialMatches(
+            exactMatchMaterial,
+            partialMatchMaterials,
+            containers
+        )
 
-        if (filteredContainers.isEmpty()) {
-            return false
+        if (searchResult.exactMatches.isEmpty() && searchResult.partialMatches.isEmpty()) {
+            return null
         }
 
-        clearContainerHighlightsForPlayer(player)
-        for (container in filteredContainers) {
-            val loc = container.block.location
-            highlightBlock(player, loc, duration)
+        clearStaticHighlightsForPlayer(player)
+
+        // Limit highlighted matches to 1000 to avoid lagging out client
+        val highlightedExactMatchCount = min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.exactMatches.size)
+        searchResult.exactMatches.subList(0, highlightedExactMatchCount).forEach {
+            val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
+            createHighlight(highlightEntity, player)
+            registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
         }
-        return true
+        searchResult.partialMatches.subList(
+            0,
+            min(MAX_VISIBLE_STATIC_HIGHLIGHTS - highlightedExactMatchCount, searchResult.partialMatches.size)
+        ).forEach {
+            val highlightEntity = cubeHighlightEntity(player, it.location!!)
+            createHighlight(highlightEntity, player)
+            registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
+        }
+
+        return searchResult
     }
 
     fun highlightItemTypeForPlayer(
@@ -163,7 +391,251 @@ class Hound : JavaPlugin() {
         player: Player,
         radius: Int = searchRadius,
         duration: Double? = highlightDuration.toDouble()
-    ): Boolean {
-        return highlightItemTypesForPlayer(listOf(material), player, radius, duration)
+    ): ExactMatchingContainersSearchResult? {
+        val containers = containersInRadius(player.location, radius)
+        val searchResult = searchContainersForExactMatches(material, containers)
+
+        if (searchResult.matches.isEmpty()) {
+            return null
+        }
+
+        clearStaticHighlightsForPlayer(player)
+
+        searchResult.matches.subList(0, min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.matches.size)).forEach {
+            val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
+            createHighlight(highlightEntity, player)
+            registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
+        }
+
+        return searchResult
+    }
+
+    fun highlightBlockTypeForPlayer(
+        material: Material,
+        player: Player,
+        radius: Int = searchRadius,
+        duration: Double? = highlightDuration.toDouble()
+    ): List<Block> {
+        val matches = blocksOfTypeInRadius(material, player.location, radius)
+
+        clearStaticHighlightsForPlayer(player)
+
+        matches.subList(0, min(MAX_VISIBLE_STATIC_HIGHLIGHTS, matches.size)).forEach {
+            val highlightEntity = shulkerBulletHighlightEntity(player, it.location)
+            createHighlight(highlightEntity, player)
+            registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
+        }
+
+        return matches
+    }
+
+    fun guideRestingY(player: Player, targetX: Double, targetZ: Double, riseDistance: Double): Double {
+        return player.world.getHighestBlockYAt(
+            Location(
+                player.world,
+                targetX,
+                0.0,
+                targetZ
+            )
+        ) + player.height + riseDistance
+    }
+
+    fun targetGuidePosition(player: Player, targetX: Double, targetZ: Double, guidePosition: Vector?): Vector {
+        val distance =
+            sqrt((player.location.x - targetX).pow(2) + (player.location.z - targetZ).pow(2))
+        val angleToTarget = atan2(targetX - player.location.x, targetZ - player.location.z)
+        val idealX: Double
+        val baseEyeHeightPosition = player.location.y + player.eyeHeight
+        var idealY = baseEyeHeightPosition
+        val idealZ: Double
+
+        val horizontalPlayerVelocity = player.velocity.clone().multiply(Vector(1, 0, 1))
+        val velocityAdjustedGuideDistance =
+            GUIDE_DISTANCE + (horizontalPlayerVelocity.length() * GUIDE_DISTANCE_VELOCITY_COEFF)
+
+        if (distance > velocityAdjustedGuideDistance) {
+            idealX = player.location.x + (sin(angleToTarget) * velocityAdjustedGuideDistance)
+            idealZ = player.location.z + (cos(angleToTarget) * velocityAdjustedGuideDistance)
+        } else {
+            idealX = targetX
+            idealZ = targetZ
+        }
+
+        val adjustedAscentLength = GUIDE_ASCENT_LENGTH
+        if (distance < adjustedAscentLength) {
+            val lerpAmount = max(easeInOutQuart((adjustedAscentLength - distance) / adjustedAscentLength), 0.0)
+
+            val restingY: Double
+            if (guidePlayerMap.containsKey(player.uniqueId)) {
+                val guideData = guidePlayerMap[player.uniqueId]!!
+                if (guideData.restingY != null) {
+                    restingY = guideData.restingY!!
+                } else {
+                    restingY = guideRestingY(player, targetX, targetZ, GUIDE_RISE_DISTANCE)
+                    guidePlayerMap[player.uniqueId]!!.restingY = restingY
+                }
+            } else {
+                restingY = guideRestingY(player, targetX, targetZ, GUIDE_RISE_DISTANCE)
+            }
+
+            idealY += (restingY - idealY) * lerpAmount
+        }
+        if (guidePosition != null) {
+            val rayTraceResult = player.world.rayTrace(
+                Location(player.world, idealX, guidePosition.y.roundToInt().toDouble(), idealZ),
+                Vector(0, -1, 0),
+                5.0,
+                FluidCollisionMode.NEVER,
+                true,
+                1.0,
+                null
+            )
+            val minY = rayTraceResult?.hitPosition?.y
+
+            if (minY != null) {
+                idealY = max(
+                    idealY, minY + player.eyeHeight
+                )
+            }
+        }
+        return Vector(idealX, idealY, idealZ)
+    }
+
+    fun createGuideForPlayer(player: Player, x: Double, z: Double) {
+        clearGuideForPlayer(player)
+
+        val highlightEntity = shulkerBulletHighlightEntity(
+            player,
+            targetGuidePosition(player, x, z, null).toLocation(player.world)
+        )
+        createHighlight(highlightEntity, player)
+
+        var teleportTickCounter = 0
+        var finished = false
+
+        val runnableId = Bukkit.getServer().scheduler.scheduleSyncRepeatingTask(
+            this,
+            {
+                val lastPosition = CraftVector.toBukkit(highlightEntity.positionVector)
+                val idealPosition = targetGuidePosition(player, x, z, lastPosition)
+
+                val acceleration =
+                    idealPosition.clone().subtract(lastPosition).multiply(0.2)
+
+                // multiply by some number less than 1 for a decay value, then add accel
+                val velocity = CraftVector.toBukkit(highlightEntity.mot).multiply(0.8).add(acceleration)
+                highlightEntity.mot = CraftVector.toNMS(velocity)
+
+                val position = lastPosition.clone().add(velocity)
+                highlightEntity.setPosition(position.x, position.y, position.z)
+
+                // Having the guide teleport every 100th tick (5 seconds) is a hacky way to keep it from drifting
+                if (teleportTickCounter >= 100) {
+                    teleportTickCounter = 0
+                }
+
+                val mustTeleport = listOf(
+                    position.x - lastPosition.x,
+                    position.y - lastPosition.y,
+                    position.z - lastPosition.z
+                ).map { abs(it) }.any { it >= 8 } || teleportTickCounter == 0
+
+                teleportTickCounter++
+
+                if (position.distance(idealPosition) >= 5) {
+                    highlightEntity.setPosition(idealPosition.x, idealPosition.y, idealPosition.z)
+                }
+
+                if (mustTeleport) {
+                    val teleportPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityTeleport(highlightEntity)
+                    (player as CraftPlayer).handle.playerConnection.sendPacket(teleportPacket)
+                } else {
+                    val packetX = ((position.x * 32 - lastPosition.x * 32) * 128).toInt().toShort()
+                    val packetY = ((position.y * 32 - lastPosition.y * 32) * 128).toInt().toShort()
+                    val packetZ = ((position.z * 32 - lastPosition.z * 32) * 128).toInt().toShort()
+
+                    val velocityPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityVelocity(
+                        highlightEntity.id,
+                        highlightEntity.mot
+                    )
+                    val movePacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntity.PacketPlayOutRelEntityMove(
+                        highlightEntity.id,
+                        packetX,
+                        packetY,
+                        packetZ,
+                        false
+                    )
+                    (player as CraftPlayer).handle.playerConnection.sendPacket(velocityPacket)
+                    player.handle.playerConnection.sendPacket(movePacket)
+                }
+
+                if (position.clone().multiply(Vector(1, 0, 1)).distance(Vector(x, 0.0, z)) < 0.01 && !finished) {
+                    finished = true
+                    val scheduler = Bukkit.getServer().scheduler
+                    val particlesTask = scheduler.scheduleSyncRepeatingTask(this, {
+                        val particlePacket = net.minecraft.server.v1_16_R3.PacketPlayOutWorldParticles(
+                            net.minecraft.server.v1_16_R3.Particles.SOUL_FIRE_FLAME,
+                            false,
+                            position.x,
+                            position.y,
+                            position.z,
+                            0f,
+                            50f,
+                            0f,
+                            0f,
+                            50
+                        )
+                        player.handle.playerConnection.sendPacket(particlePacket)
+                    }, 0, 2)
+                    scheduler.scheduleSyncDelayedTask(this, {
+                        scheduler.cancelTask(particlesTask)
+                        clearGuideForPlayer(player)
+                        val deathParticlesPacket = net.minecraft.server.v1_16_R3.PacketPlayOutWorldParticles(
+                            net.minecraft.server.v1_16_R3.Particles.SOUL_FIRE_FLAME,
+                            false,
+                            highlightEntity.positionVector.x,
+                            highlightEntity.positionVector.y,
+                            highlightEntity.positionVector.z,
+                            0.2f,
+                            0.2f,
+                            0.2f,
+                            0.008f,
+                            40
+                        )
+                        player.handle.playerConnection.sendPacket(deathParticlesPacket)
+                    }, 100)
+                }
+            }, 1, 1
+        )
+        guidePlayerMap[player.uniqueId] = PlayerGuideData(x, z, highlightEntity, runnableId, null)
+    }
+
+    // https://easings.net/#easeInOutQuart
+    fun easeInOutQuart(x: Double): Double {
+        return if (x < 0.5) {
+            8 * x * x * x * x
+        } else {
+            1 - (-2 * x + 2).pow(4) / 2
+        }
     }
 }
+
+data class PlayerGuideData(
+    val targetX: Double,
+    val targetZ: Double,
+    val highlightEntity: net.minecraft.server.v1_16_R3.Entity,
+    val runnableId: Int,
+    var restingY: Double?
+)
+
+data class ExactMatchingContainersSearchResult(
+    val matches: List<Inventory>,
+    val itemCount: Int
+)
+
+data class PartialMatchingContainersSearchResult(
+    val exactMatches: List<Inventory>,
+    val partialMatches: List<Inventory>,
+    val exactMatchItemCount: Int,
+    val partialMatchItemCount: Int
+)

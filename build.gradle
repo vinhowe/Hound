@@ -22,11 +22,11 @@ repositories {
     maven {
         url = 'https://jitpack.io'
     }
+    mavenLocal()
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2"
-    compileOnly 'org.spigotmc:spigot-api:1.16.4-R0.1-SNAPSHOT'
-    compileOnly 'com.github.dmulloy2:ProtocolLib:master-SNAPSHOT'
+    compileOnly 'org.spigotmc:spigot:1.16.5-R0.1-SNAPSHOT'
 }

@@ -4,18 +4,29 @@ main: Hound
 api-version: 1.16
 authors: [ Midnightfury, vinhowe ]
 description: Find chests
-depend:
-  - ProtocolLib
 commands:
-  hound:
+  chound:
     usage: /<command> <item>
     description: Highlight item in nearby containers.
-    aliases: [ cf, search ]
-  lhound:
+    aliases: [ cf ]
+    permission: hound.search.container
+  lchound:
     usage: /<command> [on|off]
     description: Live search mode. While active, highlights item held in main hand in nearby containers.
-    aliases: [ lcf, lsearch ]
+    aliases: [ lcf ]
+    permission: hound.search.container.live
+  bhound:
+    usage: /<command> <block>
+    description: Highlight nearby block types.
+    aliases: [ bf ]
+    permission: hound.search.block
+  target:
+    usage: /<command> <x> <z>
+    description: Create a floating guide that will lead you to coordinates
+    aliases: [ x ]
+    permission: hound.target
 permissions:
   hound.*:
     default: op
     description: Give players with op everything by default
+

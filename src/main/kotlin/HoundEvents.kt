@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.collect
 import org.bukkit.Material
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.block.Action
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerItemHeldEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -16,11 +18,12 @@ class HoundEvents(private val hound: Hound) : Listener {
         if (!event.hasBlock()) {
             return
         }
-        val player = event.player
-        if (event.clickedBlock?.state !is BlockInventoryHolder) {
+
+        if ((event.action == Action.RIGHT_CLICK_BLOCK && event.clickedBlock?.state !is BlockInventoryHolder) && event.action != Action.LEFT_CLICK_BLOCK) {
             return
         }
-        hound.clearContainerHighlightsForPlayer(player)
+
+        hound.clearStaticHighlightsForPlayer(event.player)
     }
 
     @FlowPreview
@@ -37,12 +40,8 @@ class HoundEvents(private val hound: Hound) : Listener {
             GlobalScope.launch {
                 liveSearchFlow.collect { material ->
                     hound.server.scheduler.runTask(hound, Runnable {
-                        if (!hound.highlightItemTypesForPlayer(
-                                listOf(material),
-                                player
-                            )
-                        ) {
-                            hound.clearContainerHighlightsForPlayer(player)
+                        if (hound.highlightItemTypeForPlayer(material, player) == null) {
+                            hound.clearStaticHighlightsForPlayer(player)
                         }
                     })
                 }
@@ -54,12 +53,12 @@ class HoundEvents(private val hound: Hound) : Listener {
                 }
             }
 
-            if (!hound.highlightItemTypeForPlayer(
+            if (hound.highlightItemTypeForPlayer(
                     player.inventory.itemInMainHand.type,
                     player
-                )
+                ) == null
             ) {
-                hound.clearContainerHighlightsForPlayer(player)
+                hound.clearStaticHighlightsForPlayer(player)
             }
         }
 
@@ -70,12 +69,15 @@ class HoundEvents(private val hound: Hound) : Listener {
 
     @EventHandler
     fun onPlayerDisconnect(event: PlayerQuitEvent) {
-        val player = event.player
-        if (!hound.liveSearchSet.contains(player.uniqueId)) {
-            return
-        }
+        hound.clearLiveSearchForPlayer(event.player)
+        hound.clearStaticHighlightsForPlayer(event.player)
+        hound.clearGuideForPlayer(event.player)
+    }
 
-        hound.liveSearchSet.remove(player.uniqueId)
-        hound.liveSearchEventFlows.remove(player.uniqueId)
+    @EventHandler
+    fun onPlayerChangedWorld(event: PlayerChangedWorldEvent) {
+        hound.clearLiveSearchForPlayer(event.player)
+        hound.clearStaticHighlightsForPlayer(event.player)
+        hound.clearGuideForPlayer(event.player)
     }
 }
