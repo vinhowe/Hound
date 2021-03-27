@@ -17,7 +17,7 @@ import java.util.*
 import kotlin.math.*
 
 class Hound : JavaPlugin() {
-    private val staticPlayerHighlightMap = mutableMapOf<UUID, MutableList<Int>>()
+    private val staticPlayerHighlightMap = mutableMapOf<UUID, MutableList<StaticHighlightData>>()
     val liveSearchSet = mutableSetOf<UUID>()
     val liveSearchEventFlows = mutableMapOf<UUID, MutableSharedFlow<Material>>()
     private val guidePlayerMap = mutableMapOf<UUID, PlayerGuideData>()
@@ -69,7 +69,7 @@ class Hound : JavaPlugin() {
         if (sendPacket) {
             val destroyHighlighterPacket =
                 net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(
-                    *staticPlayerHighlightMap[player.uniqueId]!!.toTypedArray().toIntArray()
+                    *staticPlayerHighlightMap[player.uniqueId]!!.map { it.entityId }.toTypedArray().toIntArray()
                 )
             player.handle.playerConnection.sendPacket(destroyHighlighterPacket)
         }
@@ -86,7 +86,7 @@ class Hound : JavaPlugin() {
 
         if (player is Player) {
             val highlightEntity = guideData.highlightEntity
-            destroyHighlight(highlightEntity, player)
+            destroyHighlight(highlightEntity.id, player)
         }
 
         Bukkit.getServer().scheduler.cancelTask(guideData.runnableId)
@@ -124,8 +124,8 @@ class Hound : JavaPlugin() {
         }
     }
 
-    private fun destroyHighlight(entity: net.minecraft.server.v1_16_R3.Entity, player: Player) {
-        val destroyHighlighterPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(entity.id)
+    private fun destroyHighlight(entityId: Int, player: Player) {
+        val destroyHighlighterPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(entityId)
         (player as CraftPlayer).handle.playerConnection.sendPacket(destroyHighlighterPacket)
     }
 
@@ -147,16 +147,31 @@ class Hound : JavaPlugin() {
             staticPlayerHighlightMap[player.uniqueId] = mutableListOf()
         }
 
-        staticPlayerHighlightMap[player.uniqueId]?.add(entity.id)
+        staticPlayerHighlightMap[player.uniqueId]?.add(
+            StaticHighlightData(
+                entity.id,
+                CraftVector.toBukkit(entity.positionVector).toLocation(player.world)
+            )
+        )
 
         if (duration == null) {
             return
         }
 
         Bukkit.getServer().scheduler.scheduleSyncDelayedTask(this, {
-            destroyHighlight(entity, player)
-            staticPlayerHighlightMap[player.uniqueId]?.remove(entity.id)
+            destroyHighlight(entity.id, player)
+            staticPlayerHighlightMap[player.uniqueId]?.removeIf { it.entityId == entity.id }
         }, (duration * 20).toLong())
+    }
+
+    fun destroyStaticHighlightsInBlock(player: Player, location: Location) {
+        staticPlayerHighlightMap[player.uniqueId]?.removeIf {
+            if (it.location.block.location == location.block.location) {
+                destroyHighlight(it.entityId, player)
+                return@removeIf true
+            }
+            return@removeIf false
+        }
     }
 
     fun cubeHighlightEntity(
@@ -429,18 +444,22 @@ class Hound : JavaPlugin() {
         return matches
     }
 
-    fun guideRestingY(player: Player, targetX: Double, targetZ: Double, riseDistance: Double): Double {
-        return player.world.getHighestBlockYAt(
-            Location(
-                player.world,
-                targetX,
-                0.0,
-                targetZ
-            )
-        ) + player.height + riseDistance
+    private fun guideRestingY(player: Player, targetX: Double, targetZ: Double, riseDistance: Double): Double {
+        return if (player.world.name.endsWith("_nether")) {
+            player.height + player.eyeHeight
+        } else {
+            player.world.getHighestBlockYAt(
+                Location(
+                    player.world,
+                    targetX,
+                    0.0,
+                    targetZ
+                )
+            ) + player.height + riseDistance
+        }
     }
 
-    fun targetGuidePosition(player: Player, targetX: Double, targetZ: Double, guidePosition: Vector?): Vector {
+    private fun targetGuidePosition(player: Player, targetX: Double, targetZ: Double, guidePosition: Vector?): Vector {
         val distance =
             sqrt((player.location.x - targetX).pow(2) + (player.location.z - targetZ).pow(2))
         val angleToTarget = atan2(targetX - player.location.x, targetZ - player.location.z)
@@ -546,18 +565,19 @@ class Hound : JavaPlugin() {
                     highlightEntity.setPosition(idealPosition.x, idealPosition.y, idealPosition.z)
                 }
 
+                val velocityPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityVelocity(
+                    highlightEntity.id,
+                    highlightEntity.mot
+                )
+                (player as CraftPlayer).handle.playerConnection.sendPacket(velocityPacket)
                 if (mustTeleport) {
                     val teleportPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityTeleport(highlightEntity)
-                    (player as CraftPlayer).handle.playerConnection.sendPacket(teleportPacket)
+                    player.handle.playerConnection.sendPacket(teleportPacket)
                 } else {
                     val packetX = ((position.x * 32 - lastPosition.x * 32) * 128).toInt().toShort()
                     val packetY = ((position.y * 32 - lastPosition.y * 32) * 128).toInt().toShort()
                     val packetZ = ((position.z * 32 - lastPosition.z * 32) * 128).toInt().toShort()
 
-                    val velocityPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityVelocity(
-                        highlightEntity.id,
-                        highlightEntity.mot
-                    )
                     val movePacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntity.PacketPlayOutRelEntityMove(
                         highlightEntity.id,
                         packetX,
@@ -565,7 +585,6 @@ class Hound : JavaPlugin() {
                         packetZ,
                         false
                     )
-                    (player as CraftPlayer).handle.playerConnection.sendPacket(velocityPacket)
                     player.handle.playerConnection.sendPacket(movePacket)
                 }
 
@@ -619,6 +638,11 @@ class Hound : JavaPlugin() {
         }
     }
 }
+
+data class StaticHighlightData(
+    val entityId: Int,
+    val location: Location,
+)
 
 data class PlayerGuideData(
     val targetX: Double,
