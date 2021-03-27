@@ -6,6 +6,7 @@ import org.bukkit.Material
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
+import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerItemHeldEvent
@@ -19,11 +20,20 @@ class HoundEvents(private val hound: Hound) : Listener {
             return
         }
 
-        if ((event.action == Action.RIGHT_CLICK_BLOCK && event.clickedBlock?.state !is BlockInventoryHolder) && event.action != Action.LEFT_CLICK_BLOCK) {
+        if (event.action != Action.RIGHT_CLICK_BLOCK || event.clickedBlock?.state !is BlockInventoryHolder) {
             return
         }
 
         hound.clearStaticHighlightsForPlayer(event.player)
+    }
+
+    @EventHandler
+    fun onPlayerBreakBlockEvent(event: BlockBreakEvent) {
+        if (event.block.isPassable || event.block.isLiquid) {
+            return
+        }
+
+        hound.destroyStaticHighlightsInBlock(event.player, event.block.location)
     }
 
     @FlowPreview
