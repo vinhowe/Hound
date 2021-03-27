@@ -44,6 +44,7 @@ class Hound : JavaPlugin() {
         val liveChestSearchCommand = LiveChestSearchCommand(this)
         val blockSearchCommand = BlockSearchCommand(this)
         val targetCommand = TargetCommand(this)
+        val torchGuideCommand = TorchGuideCommand(this)
         getCommand("chound")?.setExecutor(chestSearchCommand)
         getCommand("chound")?.tabCompleter = chestSearchCommand
         getCommand("lhound")?.setExecutor(liveChestSearchCommand)
@@ -51,6 +52,7 @@ class Hound : JavaPlugin() {
         getCommand("bhound")?.setExecutor(blockSearchCommand)
         getCommand("bhound")?.tabCompleter = blockSearchCommand
         getCommand("target")?.setExecutor(targetCommand)
+        getCommand("torchguide")?.setExecutor(torchGuideCommand)
         server.pluginManager.registerEvents(HoundEvents(this), this)
     }
 
@@ -442,6 +444,46 @@ class Hound : JavaPlugin() {
         }
 
         return matches
+    }
+
+    fun createTorchHighlightsForPlayer(player: Player, spacing: Int) {
+        clearStaticHighlightsForPlayer(player)
+        val distance = 5
+        val rayTraceHeight = 10
+        for (x in -distance..distance) {
+            for (z in -distance..distance) {
+                val rayTracePosition = Location(
+                    player.world,
+                    player.location.blockX + (x * spacing).toDouble(),
+                    player.location.blockY.toDouble() + rayTraceHeight / 2,
+                    player.location.blockZ + (z * spacing).toDouble()
+                )
+                val rayTraceResult = player.world.rayTraceBlocks(
+                    rayTracePosition,
+                    Vector(0, -1, 0),
+                    rayTraceHeight.toDouble(),
+                    FluidCollisionMode.NEVER,
+                    true
+                )
+                val y: Double =
+                    rayTraceResult?.hitPosition?.blockY?.toDouble() ?: continue
+                var highlightLocation = Location(player.world, rayTracePosition.x, y, rayTracePosition.z)
+
+                if (highlightLocation.block.isLiquid) {
+                    continue
+                }
+                highlightLocation = highlightLocation.add(Vector(0, -1, 0))
+                if (highlightLocation.block.isLiquid) {
+                    continue
+                }
+
+                val highlightEntity = shulkerBulletHighlightEntity(
+                    player, highlightLocation
+                )
+                createHighlight(highlightEntity, player)
+                registerTemporaryStaticHighlightForPlayer(highlightEntity, player, 1200.0)
+            }
+        }
     }
 
     private fun guideRestingY(player: Player, targetX: Double, targetZ: Double, riseDistance: Double): Double {

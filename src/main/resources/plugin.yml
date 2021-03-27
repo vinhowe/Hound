@@ -22,9 +22,14 @@ commands:
     permission: hound.search.block
   target:
     usage: /<command> <x> <z>
-    description: Create a floating guide that will lead you to coordinates
+    description: Create a floating guide that will lead you to coordinates.
     aliases: [ x ]
     permission: hound.target
+  torchguide:
+    usage: /<command> <x> <z>
+    description: Highlight a grid guide for torches
+    aliases: [ tg ]
+    permission: hound.torchguide
 permissions:
   hound.*:
     default: op
