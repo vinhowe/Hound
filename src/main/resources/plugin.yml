@@ -15,11 +15,6 @@ commands:
     description: Live search mode. While active, highlights item held in main hand in nearby containers.
     aliases: [ lcf ]
     permission: hound.search.container.live
-  bhound:
-    usage: /<command> <block>
-    description: Highlight nearby block types.
-    aliases: [ bf ]
-    permission: hound.search.block
   target:
     usage: /<command> <x> <z>
     description: Create a floating guide that will lead you to coordinates.
