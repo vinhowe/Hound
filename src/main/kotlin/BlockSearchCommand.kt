@@ -11,14 +11,7 @@ class BlockSearchCommand(val hound: Hound) : TabExecutor {
         alias: String,
         args: Array<out String>
     ): List<String> {
-        val suggestions = mutableListOf<String>()
-        if (args.size == 1) {
-            for (material in Material.values()) {
-                suggestions.add(material.toString().toLowerCase())
-            }
-            return suggestions
-        }
-        return emptyList()
+        return if (args.size == 1) BLOCKS else emptyList()
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -64,4 +57,10 @@ class BlockSearchCommand(val hound: Hound) : TabExecutor {
 
         return true
     }
+    
+    
+    private companion object {
+        val BLOCKS = Material.values().filter(Material::isBlock).map(Material::name).map(String::toLowerCase)
+    }
+    
 }
