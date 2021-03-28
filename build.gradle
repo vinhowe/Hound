@@ -6,9 +6,6 @@ plugins {
 group = 'vin.howe'
 version = '0.3.0'
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
-
 repositories {
     mavenCentral()
     maven {
@@ -29,4 +26,24 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2"
     compileOnly 'org.spigotmc:spigot:1.16.5-R0.1-SNAPSHOT'
+}
+
+
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+    options.compilerArgs += ["-parameters"]
+    
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+    kotlinOptions.freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                                       "-Xopt-in=kotlin.ExperimentalStdlibApi"]
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+    kotlinOptions.freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                                       "-Xopt-in=kotlin.ExperimentalStdlibApi"]
 }
