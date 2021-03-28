@@ -23,7 +23,7 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         var exactMatchMaterial: Material? = null
         if (args.size == 1) {
             // Search for all items whose names contain the argument string
-            for (material in POSSIBLE) {
+            for (material in ITEMS) {
                 if (material.name.equals(args[0], true)) {
                     exactMatchMaterial = material
                 }
@@ -81,7 +81,7 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         alias: String,
         args: Array<out String>
     ): List<String> {
-        return if (args.size == 1) POSSIBLE_NAMES else emptyList()
+        return if (args.size == 1) ITEM_NAMES else emptyList()
     }
 
     private fun partialMatchesResultMessage(
@@ -141,8 +141,8 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
     
     
     private companion object {
-        val POSSIBLE = Material.values().filter(Material::isItem)
-        val POSSIBLE_NAMES = POSSIBLE.map(Material::name).map(String::toLowerCase)
+        val ITEMS = Material.values().filter(Material::isItem)
+        val ITEM_NAMES = ITEMS.map(Material::name).map(String::toLowerCase)
     }
     
 }
