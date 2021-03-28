@@ -32,14 +32,14 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
                 }
             }
         } else {
-            val hand = sender.inventory.itemInMainHand.type
+            val handItemType = sender.inventory.itemInMainHand.type
     
-            if (hand.isAir) {
+            if (handItemType.isAir) {
                 sender.sendMessage("§4Couldn't find anything in selected slot.")
                 return true
             }
             
-            exactMatchMaterial = hand
+            exactMatchMaterial = handItemType
         }
 
         val radius = hound.searchRadius
