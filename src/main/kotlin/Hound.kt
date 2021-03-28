@@ -1,3 +1,4 @@
+import co.aikar.commands.PaperCommandManager
 import com.google.common.collect.ImmutableMap
 import com.mojang.serialization.MapCodec
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,6 +41,24 @@ class Hound : JavaPlugin() {
     override fun onEnable() {
         super.onEnable()
         saveDefaultConfig()
+        
+        
+        val manager = PaperCommandManager(this)
+        manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
+        manager.usePerIssuerLocale(true, true)
+        
+        val materials = Material.values()
+        
+        manager.commandCompletions.registerStaticCompletion("blocks",
+                                                            materials
+                                                                .filter(Material::isBlock)
+                                                                .map(Material::name)
+                                                                .map(String::toLowerCase))
+        
+        
+        manager.registerCommand(cmds.BlockSearchCommand(this))
+        
+        
         val chestSearchCommand = ChestSearchCommand(this)
         val liveChestSearchCommand = LiveChestSearchCommand(this)
         val targetCommand = TargetCommand(this)
