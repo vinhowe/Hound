@@ -23,19 +23,23 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         var exactMatchMaterial: Material? = null
         if (args.size == 1) {
             // Search for all items whose names contain the argument string
-            Material.values().forEach {
-                if (it.name.equals(args[0], true)) {
-                    exactMatchMaterial = it
-                } else if (it.name.contains(args[0], true)) {
-                    materials += it
+            for (material in ITEMS) {
+                if (material.name.equals(args[0], true)) {
+                    exactMatchMaterial = material
+                }
+                else if (material.name.contains(args[0], true)) {
+                    materials += material
                 }
             }
         } else {
-            if (sender.inventory.itemInMainHand.type.isAir) {
+            val handItemType = sender.inventory.itemInMainHand.type
+    
+            if (handItemType.isAir) {
                 sender.sendMessage("§4Couldn't find anything in selected slot.")
                 return true
             }
-            exactMatchMaterial = sender.inventory.itemInMainHand.type
+            
+            exactMatchMaterial = handItemType
         }
 
         val radius = hound.searchRadius
@@ -77,14 +81,7 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         alias: String,
         args: Array<out String>
     ): List<String> {
-        val suggestions = mutableListOf<String>()
-        if (args.size == 1) {
-            for (material in Material.values()) {
-                suggestions.add(material.toString().toLowerCase())
-            }
-            return suggestions
-        }
-        return emptyList()
+        return if (args.size == 1) ITEM_NAMES else emptyList()
     }
 
     private fun partialMatchesResultMessage(
@@ -141,4 +138,11 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         }
         return "Found ${searchResult.itemCount} $matchesPluralized for '$displayName' in ${searchResult.matches.size} $chestsPluralized"
     }
+    
+    
+    private companion object {
+        val ITEMS = Material.values().filter(Material::isItem)
+        val ITEM_NAMES = ITEMS.map(Material::name).map(String::toLowerCase)
+    }
+    
 }
