@@ -23,19 +23,23 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         var exactMatchMaterial: Material? = null
         if (args.size == 1) {
             // Search for all items whose names contain the argument string
-            Material.values().forEach {
-                if (it.name.equals(args[0], true)) {
-                    exactMatchMaterial = it
-                } else if (it.name.contains(args[0], true)) {
-                    materials += it
+            for (material in POSSIBLE) {
+                if (material.name.equals(args[0], true)) {
+                    exactMatchMaterial = material
+                }
+                else if (material.name.contains(args[0], true)) {
+                    materials += material
                 }
             }
         } else {
-            if (sender.inventory.itemInMainHand.type.isAir) {
+            val hand = sender.inventory.itemInMainHand.type
+    
+            if (hand.isAir) {
                 sender.sendMessage("§4Couldn't find anything in selected slot.")
                 return true
             }
-            exactMatchMaterial = sender.inventory.itemInMainHand.type
+            
+            exactMatchMaterial = hand
         }
 
         val radius = hound.searchRadius
