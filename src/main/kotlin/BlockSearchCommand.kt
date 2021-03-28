@@ -27,10 +27,8 @@ class BlockSearchCommand(val hound: Hound) : TabExecutor {
             return false
         }
 
-        val material: Material
-        try {
-            material = Material.values().first { it.name.equals(args[0], true) }
-        } catch (e: NoSuchElementException) {
+        val material = Material.matchMaterial(args[0])
+        if (material == null) {
             sender.sendMessage("§4'${args[0].toLowerCase()}' is not a valid item type.")
             return true
         }
