@@ -77,14 +77,7 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         alias: String,
         args: Array<out String>
     ): List<String> {
-        val suggestions = mutableListOf<String>()
-        if (args.size == 1) {
-            for (material in Material.values()) {
-                suggestions.add(material.toString().toLowerCase())
-            }
-            return suggestions
-        }
-        return emptyList()
+        return if (args.size == 1) POSSIBLE_NAMES else emptyList()
     }
 
     private fun partialMatchesResultMessage(
@@ -141,4 +134,11 @@ class ChestSearchCommand(private val hound: Hound) : TabExecutor {
         }
         return "Found ${searchResult.itemCount} $matchesPluralized for '$displayName' in ${searchResult.matches.size} $chestsPluralized"
     }
+    
+    
+    private companion object {
+        val POSSIBLE = Material.values().filter(Material::isItem)
+        val POSSIBLE_NAMES = POSSIBLE.map(Material::name).map(String::toLowerCase)
+    }
+    
 }
