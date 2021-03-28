@@ -42,15 +42,13 @@ class Hound : JavaPlugin() {
         saveDefaultConfig()
         val chestSearchCommand = ChestSearchCommand(this)
         val liveChestSearchCommand = LiveChestSearchCommand(this)
-        val blockSearchCommand = BlockSearchCommand(this)
         val targetCommand = TargetCommand(this)
         val torchGuideCommand = TorchGuideCommand(this)
         getCommand("chound")?.setExecutor(chestSearchCommand)
         getCommand("chound")?.tabCompleter = chestSearchCommand
         getCommand("lhound")?.setExecutor(liveChestSearchCommand)
         getCommand("lhound")?.tabCompleter = liveChestSearchCommand
-        getCommand("bhound")?.setExecutor(blockSearchCommand)
-        getCommand("bhound")?.tabCompleter = blockSearchCommand
+   
         getCommand("target")?.setExecutor(targetCommand)
         getCommand("torchguide")?.setExecutor(torchGuideCommand)
         server.pluginManager.registerEvents(HoundEvents(this), this)
