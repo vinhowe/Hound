@@ -1,3 +1,2 @@
 Manifest-Version: 1.0
-Main-Class: io.github.midnightfury.Hound
-
+Main-Class: vin.howe.Hound
