@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm' version '1.4.10'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
 }
 
 group = 'vin.howe'
@@ -37,6 +38,13 @@ dependencies {
 }
 
 
+shadowJar {
+    archiveClassifier.set("")
+    
+    relocate "co.aikar.commands", "hound.libs.acf"
+    relocate "co.aikar.locales", "hound.libs.locales"
+}
+
 tasks.withType(JavaCompile) {
     options.encoding = "UTF-8"
     options.compilerArgs += ["-parameters"]
@@ -55,3 +63,5 @@ compileTestKotlin {
     kotlinOptions.freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
                                        "-Xopt-in=kotlin.ExperimentalStdlibApi"]
 }
+
+build.dependsOn shadowJar
