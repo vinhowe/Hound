@@ -1,7 +1,6 @@
 import co.aikar.commands.InvalidCommandArgument
 import co.aikar.commands.PaperCommandManager
-import com.google.common.collect.ImmutableMap
-import com.mojang.serialization.MapCodec
+import data.LiveSearchState
 import data.PartialMatchModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.bukkit.*
@@ -58,6 +57,8 @@ class Hound : JavaPlugin() {
 
         manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
 
+        manager.commandCompletions.registerStaticCompletion("states", listOf("on", "off"))
+
         manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
 
             val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
@@ -92,7 +93,29 @@ class Hound : JavaPlugin() {
                 PartialMatchModel(input, exact, fuzzy)
             }
         }
-        
+
+        manager.commandContexts.registerIssuerAwareContext(LiveSearchState::class.java) { context ->
+
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+
+            val input = context.popFirstArg()
+
+            val currentState = player.uniqueId in liveSearchSet
+
+            val desiredState = if (input == null) {
+
+                !currentState
+
+            } else when (input.toLowerCase()) {
+                "on"  -> true
+                "off" -> false
+                else  -> {
+                    throw InvalidCommandArgument("&4Invalid state")
+                }
+            }
+
+            LiveSearchState(currentState, desiredState)
+        }
         
         manager.registerCommand(cmds.BlockSearchCommand(this))
         manager.registerCommand(cmds.ChestSearchCommand(this))
