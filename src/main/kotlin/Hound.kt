@@ -168,6 +168,7 @@ class Hound : JavaPlugin() {
         manager.registerCommand(cmds.ChestSearchCommand(this))
         manager.registerCommand(cmds.LiveChestSearchCommand(this))
         manager.registerCommand(cmds.TargetCommand(this))
+        manager.registerCommand(cmds.TorchGuideCommand(this))
 
 
         server.pluginManager.registerEvents(HoundEvents(this), this)
