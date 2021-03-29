@@ -749,14 +749,17 @@ data class PlayerGuideData(
     var restingY: Double?
 )
 
+
+sealed class ContainersSearchResult
+
 data class ExactMatchingContainersSearchResult(
     val matches: List<Inventory>,
     val itemCount: Int
-)
+) : ContainersSearchResult()
 
 data class PartialMatchingContainersSearchResult(
     val exactMatches: List<Inventory>,
     val partialMatches: List<Inventory>,
     val exactMatchItemCount: Int,
     val partialMatchItemCount: Int
-)
+) : ContainersSearchResult()
