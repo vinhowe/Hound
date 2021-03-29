@@ -119,6 +119,7 @@ class Hound : JavaPlugin() {
         
         manager.registerCommand(cmds.BlockSearchCommand(this))
         manager.registerCommand(cmds.ChestSearchCommand(this))
+        manager.registerCommand(cmds.LiveChestSearchCommand(this))
 
 
         val targetCommand = TargetCommand(this)
