@@ -1,13 +1,11 @@
 plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm' version '1.4.10'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
 }
 
 group = 'vin.howe'
 version = '0.3.0'
-
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
 
 repositories {
     mavenCentral()
@@ -22,11 +20,51 @@ repositories {
     maven {
         url = 'https://jitpack.io'
     }
+
+    maven {
+        url = uri("https://repo.aikar.co/content/groups/aikar/")
+    }
+    maven {
+        url = uri("https://papermc.io/repo/repository/maven-public/")
+    }
+    
     mavenLocal()
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2"
+    
+    implementation "co.aikar:acf-paper:0.5.0-SNAPSHOT"
+    
     compileOnly 'org.spigotmc:spigot:1.16.5-R0.1-SNAPSHOT'
 }
+
+
+shadowJar {
+    archiveClassifier.set("")
+    
+    relocate "co.aikar.commands", "hound.libs.acf"
+    relocate "co.aikar.locales", "hound.libs.locales"
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+    options.compilerArgs += ["-parameters"]
+    
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+    kotlinOptions.freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                                       "-Xopt-in=kotlin.ExperimentalStdlibApi"]
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+    kotlinOptions.freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                                       "-Xopt-in=kotlin.ExperimentalStdlibApi"]
+}
+
+build.dependsOn shadowJar

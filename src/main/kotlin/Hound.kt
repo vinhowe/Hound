@@ -1,5 +1,7 @@
-import com.google.common.collect.ImmutableMap
-import com.mojang.serialization.MapCodec
+import co.aikar.commands.InvalidCommandArgument
+import co.aikar.commands.PaperCommandManager
+import data.LiveSearchState
+import data.PartialMatchModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.bukkit.*
 import org.bukkit.block.Block
@@ -13,6 +15,7 @@ import org.bukkit.inventory.DoubleChestInventory
 import org.bukkit.inventory.Inventory
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
+import java.math.RoundingMode
 import java.util.*
 import kotlin.math.*
 
@@ -40,19 +43,111 @@ class Hound : JavaPlugin() {
     override fun onEnable() {
         super.onEnable()
         saveDefaultConfig()
-        val chestSearchCommand = ChestSearchCommand(this)
-        val liveChestSearchCommand = LiveChestSearchCommand(this)
-        val blockSearchCommand = BlockSearchCommand(this)
-        val targetCommand = TargetCommand(this)
-        val torchGuideCommand = TorchGuideCommand(this)
-        getCommand("chound")?.setExecutor(chestSearchCommand)
-        getCommand("chound")?.tabCompleter = chestSearchCommand
-        getCommand("lhound")?.setExecutor(liveChestSearchCommand)
-        getCommand("lhound")?.tabCompleter = liveChestSearchCommand
-        getCommand("bhound")?.setExecutor(blockSearchCommand)
-        getCommand("bhound")?.tabCompleter = blockSearchCommand
-        getCommand("target")?.setExecutor(targetCommand)
-        getCommand("torchguide")?.setExecutor(torchGuideCommand)
+
+        val manager = PaperCommandManager(this)
+        // manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
+        manager.usePerIssuerLocale(true, true)
+        
+        val materials = Material.values()
+
+        val items = materials.filter(Material::isItem)
+        val blocks = materials.filter(Material::isBlock)
+
+        manager.commandCompletions.registerStaticCompletion("items", items.map(Material::name).map(String::toLowerCase))
+        manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
+        manager.commandCompletions.registerStaticCompletion("states", listOf("on", "off"))
+
+        manager.commandCompletions.registerCompletion("coords") { context ->
+            val suggestions = mutableListOf("~")
+
+            context.player?.let {
+                val origin = when {
+                    context.hasConfig("x") -> it.location.x
+                    context.hasConfig("y") -> it.location.y
+                    context.hasConfig("z") -> it.location.z
+                    else -> Double.NaN
+                }
+
+                if (!origin.isNaN()) {
+                    suggestions += origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toPlainString()
+                }
+            }
+
+            suggestions
+        }
+
+        manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val input = context.popFirstArg()
+
+            if (input == null) {
+                val handItemType = player.inventory.itemInMainHand.type
+
+                if (handItemType.isAir) {
+                    throw InvalidCommandArgument("&4Couldn't find anything in selected slot.")
+                }
+
+                PartialMatchModel(handItemType.name.toLowerCase(), handItemType, emptyList())
+            } else {
+                var exact = null as Material?
+                val fuzzy = mutableSetOf<Material>()
+
+                for (item in items) {
+                    if (item.name.equals(input, true)) {
+                        exact = item
+                    } else if (item.name.contains(input, true)) {
+                        fuzzy += item
+                    }
+                }
+
+                PartialMatchModel(input, exact, fuzzy)
+            }
+        }
+
+        manager.commandContexts.registerIssuerAwareContext(LiveSearchState::class.java) { context ->
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val input = context.popFirstArg()
+
+            val currentState = player.uniqueId in liveSearchSet
+            val desiredState = if (input == null) {
+                !currentState
+            } else when (input.toLowerCase()) {
+                "on"  -> true
+                "off" -> false
+                else  -> {
+                    throw InvalidCommandArgument("&4Invalid state")
+                }
+            }
+
+            LiveSearchState(currentState, desiredState)
+        }
+
+        manager.commandContexts.registerIssuerAwareContext(Double::class.javaObjectType) { context ->
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val input = context.popFirstArg() ?: return@registerIssuerAwareContext null
+
+            if (!input.startsWith("~")) {
+                input.toDoubleOrNull() ?: throw InvalidCommandArgument("&4You must supply a valid coordinate.")
+            } else {
+                val origin = when {
+                    context.hasFlag("x") -> player.location.x
+                    context.hasFlag("y") -> player.location.y
+                    context.hasFlag("z") -> player.location.z
+                    else -> {
+                        throw InvalidCommandArgument("&4Coordinate must be absolute.")
+                    }
+                }
+
+                origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toDouble() + (input.drop(1).toDoubleOrNull() ?: 0.0)
+            }
+        }
+        
+        manager.registerCommand(cmds.BlockSearchCommand(this))
+        manager.registerCommand(cmds.ChestSearchCommand(this))
+        manager.registerCommand(cmds.LiveChestSearchCommand(this))
+        manager.registerCommand(cmds.TargetCommand(this))
+        manager.registerCommand(cmds.TorchGuideCommand(this))
+
         server.pluginManager.registerEvents(HoundEvents(this), this)
     }
 
@@ -694,14 +789,17 @@ data class PlayerGuideData(
     var restingY: Double?
 )
 
+
+sealed class ContainersSearchResult
+
 data class ExactMatchingContainersSearchResult(
     val matches: List<Inventory>,
     val itemCount: Int
-)
+) : ContainersSearchResult()
 
 data class PartialMatchingContainersSearchResult(
     val exactMatches: List<Inventory>,
     val partialMatches: List<Inventory>,
     val exactMatchItemCount: Int,
     val partialMatchItemCount: Int
-)
+) : ContainersSearchResult()
