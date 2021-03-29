@@ -12,8 +12,8 @@ import org.bukkit.Material
 import org.bukkit.entity.Player
 
 @CommandAlias("bhound|bf")
-data class BlockSearchCommand(private val hound: Hound) : BaseCommand() {
-	
+class BlockSearchCommand(private val hound: Hound) : BaseCommand() {
+
 	@Default
 	@Syntax("<block>")
 	@CommandCompletion("@blocks")
