@@ -5,11 +5,6 @@ api-version: 1.16
 authors: [ Midnightfury, vinhowe ]
 description: Find chests
 commands:
-  chound:
-    usage: /<command> <item>
-    description: Highlight item in nearby containers.
-    aliases: [ cf ]
-    permission: hound.search.container
   lchound:
     usage: /<command> [on|off]
     description: Live search mode. While active, highlights item held in main hand in nearby containers.
