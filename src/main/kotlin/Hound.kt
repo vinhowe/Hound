@@ -15,6 +15,7 @@ import org.bukkit.inventory.DoubleChestInventory
 import org.bukkit.inventory.Inventory
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
+import java.math.RoundingMode
 import java.util.*
 import kotlin.math.*
 
@@ -58,6 +59,29 @@ class Hound : JavaPlugin() {
         manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
 
         manager.commandCompletions.registerStaticCompletion("states", listOf("on", "off"))
+
+        manager.commandCompletions.registerCompletion("coords") { context ->
+
+            val suggestions = mutableListOf("~")
+
+            val player = context.player
+
+            if (player != null) {
+
+                val origin = when {
+                    context.hasConfig("x") -> player.location.x
+                    context.hasConfig("y") -> player.location.y
+                    context.hasConfig("z") -> player.location.z
+                    else -> Double.NaN
+                }
+
+                if (!origin.isNaN()) {
+                    suggestions += origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toPlainString()
+                }
+            }
+
+            suggestions
+        }
 
         manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
 
@@ -115,6 +139,29 @@ class Hound : JavaPlugin() {
             }
 
             LiveSearchState(currentState, desiredState)
+        }
+
+        manager.commandContexts.registerIssuerAwareContext(Double::class.javaObjectType) { context ->
+
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+
+            val input = context.popFirstArg() ?: return@registerIssuerAwareContext null
+
+            if (!input.startsWith("~")) {
+                input.toDoubleOrNull() ?: throw InvalidCommandArgument("&4You must supply a valid coordinate.")
+            } else {
+
+                val origin = when {
+                    context.hasFlag("x") -> player.location.x
+                    context.hasFlag("y") -> player.location.y
+                    context.hasFlag("z") -> player.location.z
+                    else -> {
+                        throw InvalidCommandArgument("&4Coordinate must be absolute.")
+                    }
+                }
+
+                origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toDouble() + (input.drop(1).toDoubleOrNull() ?: 0.0)
+            }
         }
         
         manager.registerCommand(cmds.BlockSearchCommand(this))
