@@ -121,11 +121,8 @@ class Hound : JavaPlugin() {
         manager.registerCommand(cmds.ChestSearchCommand(this))
 
 
-        val liveChestSearchCommand = LiveChestSearchCommand(this)
         val targetCommand = TargetCommand(this)
         val torchGuideCommand = TorchGuideCommand(this)
-        getCommand("lhound")?.setExecutor(liveChestSearchCommand)
-        getCommand("lhound")?.tabCompleter = liveChestSearchCommand
    
         getCommand("target")?.setExecutor(targetCommand)
         getCommand("torchguide")?.setExecutor(torchGuideCommand)
