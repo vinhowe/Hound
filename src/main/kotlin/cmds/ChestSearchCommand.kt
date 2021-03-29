@@ -11,16 +11,13 @@ import org.bukkit.entity.Player
 @CommandAlias("chound|cf")
 class ChestSearchCommand(private val hound: Hound) : BaseCommand() {
 
-
     @Default
     @Syntax("<item>")
     @CommandCompletion("@items")
     @CommandPermission("hound.search.container")
     @Description("Highlight item in nearby containers.")
     fun search(player: Player, model: PartialMatchModel) {
-
         val radius = hound.searchRadius
-
         val result = if (model.exact != null && model.fuzzy.isEmpty()) {
             hound.highlightItemTypeForPlayer(model.exact, player)
         } else {

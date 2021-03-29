@@ -43,8 +43,7 @@ class Hound : JavaPlugin() {
     override fun onEnable() {
         super.onEnable()
         saveDefaultConfig()
-        
-        
+
         val manager = PaperCommandManager(this)
         // manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
         manager.usePerIssuerLocale(true, true)
@@ -55,23 +54,17 @@ class Hound : JavaPlugin() {
         val blocks = materials.filter(Material::isBlock)
 
         manager.commandCompletions.registerStaticCompletion("items", items.map(Material::name).map(String::toLowerCase))
-
         manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
-
         manager.commandCompletions.registerStaticCompletion("states", listOf("on", "off"))
 
         manager.commandCompletions.registerCompletion("coords") { context ->
-
             val suggestions = mutableListOf("~")
 
-            val player = context.player
-
-            if (player != null) {
-
+            context.player?.let {
                 val origin = when {
-                    context.hasConfig("x") -> player.location.x
-                    context.hasConfig("y") -> player.location.y
-                    context.hasConfig("z") -> player.location.z
+                    context.hasConfig("x") -> it.location.x
+                    context.hasConfig("y") -> it.location.y
+                    context.hasConfig("z") -> it.location.z
                     else -> Double.NaN
                 }
 
@@ -84,13 +77,10 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
-
             val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
-
             val input = context.popFirstArg()
 
             if (input == null) {
-
                 val handItemType = player.inventory.itemInMainHand.type
 
                 if (handItemType.isAir) {
@@ -99,17 +89,13 @@ class Hound : JavaPlugin() {
 
                 PartialMatchModel(handItemType.name.toLowerCase(), handItemType, emptyList())
             } else {
-
                 var exact = null as Material?
                 val fuzzy = mutableSetOf<Material>()
 
                 for (item in items) {
-
-                    val name = item.name
-
-                    if (name.equals(input, true)) {
+                    if (item.name.equals(input, true)) {
                         exact = item
-                    } else if (name.contains(input, true)) {
+                    } else if (item.name.contains(input, true)) {
                         fuzzy += item
                     }
                 }
@@ -119,17 +105,12 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(LiveSearchState::class.java) { context ->
-
             val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
-
             val input = context.popFirstArg()
 
             val currentState = player.uniqueId in liveSearchSet
-
             val desiredState = if (input == null) {
-
                 !currentState
-
             } else when (input.toLowerCase()) {
                 "on"  -> true
                 "off" -> false
@@ -142,15 +123,12 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(Double::class.javaObjectType) { context ->
-
             val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
-
             val input = context.popFirstArg() ?: return@registerIssuerAwareContext null
 
             if (!input.startsWith("~")) {
                 input.toDoubleOrNull() ?: throw InvalidCommandArgument("&4You must supply a valid coordinate.")
             } else {
-
                 val origin = when {
                     context.hasFlag("x") -> player.location.x
                     context.hasFlag("y") -> player.location.y
@@ -169,7 +147,6 @@ class Hound : JavaPlugin() {
         manager.registerCommand(cmds.LiveChestSearchCommand(this))
         manager.registerCommand(cmds.TargetCommand(this))
         manager.registerCommand(cmds.TorchGuideCommand(this))
-
 
         server.pluginManager.registerEvents(HoundEvents(this), this)
     }

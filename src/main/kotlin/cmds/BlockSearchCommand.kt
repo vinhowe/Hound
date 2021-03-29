@@ -20,18 +20,14 @@ class BlockSearchCommand(private val hound: Hound) : BaseCommand() {
 	@CommandPermission("hound.search.block")
 	@Description("Highlight nearby block types.")
 	fun search(player: Player, material: Material) {
-		
 		val radius = hound.searchRadius
-		
 		val blocks = hound.highlightBlockTypeForPlayer(material, player)
-		
-		
+
 		if (blocks.isNotEmpty()) {
 			player.sendMessage("§6Found ${blocks.size} ${if (blocks.size == 1) "block" else "blocks"} of type '${material.name.toLowerCase()}'")
 		} else {
 			player.sendMessage("§4Couldn't find any blocks of type '${material.name.toLowerCase()}' within $radius ${if (radius == 1) "block" else "blocks"} of you.")
 		}
-		
 	}
 	
 }

@@ -14,13 +14,11 @@ class TorchGuideCommand(private val hound: Hound) : BaseCommand() {
     @CommandPermission("hound.torchguide")
     @Description("Highlight a grid guide for torches")
     fun guide(player: Player, @Optional spacing: Int?) {
-
         if (spacing == null) {
             hound.clearStaticHighlightsForPlayer(player)
         } else {
             hound.createTorchHighlightsForPlayer(player, spacing)
         }
-
     }
 
 }
