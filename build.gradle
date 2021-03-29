@@ -20,7 +20,10 @@ repositories {
     maven {
         url = 'https://jitpack.io'
     }
-    
+
+    maven {
+        url = uri("https://repo.aikar.co/content/groups/aikar/")
+    }
     maven {
         url = uri("https://papermc.io/repo/repository/maven-public/")
     }
