@@ -170,9 +170,6 @@ class Hound : JavaPlugin() {
         manager.registerCommand(cmds.TargetCommand(this))
 
 
-        val torchGuideCommand = TorchGuideCommand(this)
-
-        getCommand("torchguide")?.setExecutor(torchGuideCommand)
         server.pluginManager.registerEvents(HoundEvents(this), this)
     }
 
