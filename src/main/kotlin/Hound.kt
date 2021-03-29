@@ -46,7 +46,7 @@ class Hound : JavaPlugin() {
         
         
         val manager = PaperCommandManager(this)
-        manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
+        // manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
         manager.usePerIssuerLocale(true, true)
         
         val materials = Material.values()
