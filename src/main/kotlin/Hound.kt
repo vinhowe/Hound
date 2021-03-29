@@ -1,6 +1,8 @@
+import co.aikar.commands.InvalidCommandArgument
 import co.aikar.commands.PaperCommandManager
 import com.google.common.collect.ImmutableMap
 import com.mojang.serialization.MapCodec
+import data.PartialMatchModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.bukkit.*
 import org.bukkit.block.Block
@@ -55,6 +57,41 @@ class Hound : JavaPlugin() {
         manager.commandCompletions.registerStaticCompletion("items", items.map(Material::name).map(String::toLowerCase))
 
         manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
+
+        manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
+
+            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+
+            val input = context.popFirstArg()
+
+            if (input == null) {
+
+                val handItemType = player.inventory.itemInMainHand.type
+
+                if (handItemType.isAir) {
+                    throw InvalidCommandArgument("&4Couldn't find anything in selected slot.")
+                }
+
+                PartialMatchModel(handItemType.name.toLowerCase(), handItemType, emptyList())
+            } else {
+
+                var exact = null as Material?
+                val fuzzy = mutableSetOf<Material>()
+
+                for (item in items) {
+
+                    val name = item.name
+
+                    if (name.equals(input, true)) {
+                        exact = item
+                    } else if (name.contains(input, true)) {
+                        fuzzy += item
+                    }
+                }
+
+                PartialMatchModel(input, exact, fuzzy)
+            }
+        }
         
         
         manager.registerCommand(cmds.BlockSearchCommand(this))
