@@ -48,12 +48,13 @@ class Hound : JavaPlugin() {
         manager.usePerIssuerLocale(true, true)
         
         val materials = Material.values()
-        
-        manager.commandCompletions.registerStaticCompletion("blocks",
-                                                            materials
-                                                                .filter(Material::isBlock)
-                                                                .map(Material::name)
-                                                                .map(String::toLowerCase))
+
+        val items = materials.filter(Material::isItem)
+        val blocks = materials.filter(Material::isBlock)
+
+        manager.commandCompletions.registerStaticCompletion("items", items.map(Material::name).map(String::toLowerCase))
+
+        manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
         
         
         manager.registerCommand(cmds.BlockSearchCommand(this))
