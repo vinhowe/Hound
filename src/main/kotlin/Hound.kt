@@ -167,6 +167,7 @@ class Hound : JavaPlugin() {
         manager.registerCommand(cmds.BlockSearchCommand(this))
         manager.registerCommand(cmds.ChestSearchCommand(this))
         manager.registerCommand(cmds.LiveChestSearchCommand(this))
+        manager.registerCommand(cmds.TargetCommand(this))
 
 
         val torchGuideCommand = TorchGuideCommand(this)
