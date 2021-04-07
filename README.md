@@ -3,7 +3,7 @@
 Hound is a Spigot Plugin that adds useful navigation and search features to your server using glowing Shulker bullets.
 
 ## Features
-* Navigate to a Cordinate.
+* Navigate to a coordinate.
 * Search nearby chests for an item.
 * Search for a specific block nearby.
 
