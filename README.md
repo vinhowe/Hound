@@ -24,7 +24,7 @@ git clone https://github.com/vinhowe/Hound.git
 cd Hound
 ./gradlew build
 ```
-Your build should be in `/build/libs`.
+Your build should be in `./build/libs`.
 ## License
 
 Hound is licensed under the [GPLv3 License](https://github.com/vinhowe/Hound/blob/main/LICENSE).
