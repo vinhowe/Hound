@@ -1,28 +1,30 @@
 # Hound
 
-Hound is a Spigot Plugin that adds useful navigation and search features to your server using glowing Shulker bullets.
+Hound is a Spigot plugin that adds useful navigation and search features using glowing Shulker bullets.
 
 ## Features
-* Navigate to a coordinate.
+* Navigate to coordinates.
 * Search nearby chests for an item.
 * Search for a specific block nearby.
 
-### Download
-You can download Hound from [here](https://github.com/vinhowe/Hound/releases).
-
 ## Building
 
-#### Windows
-1: Download the [source](https://github.com/vinhowe/Hound/archive/refs/heads/main.zip)
+### Windows
+1. Download [Git](https://git-scm.com/downloads)
+2. Open Git Bash
 
-2: Unzip it
+### Linux
+1. Install ```git``` using your package manager
 
-3: In the folder open a powershell window by clicking on the path and writing ```powershell```
+### All platforms
 
-4: In Powershell run ```./gradlew build```
-
-5: Copy the compiled Hound jar from ```\build\libs```
-
+Now run these commands in your terminal
+```
+git clone https://github.com/vinhowe/Hound.git
+cd Hound
+./gradlew build
+```
+Your build should be in ```/build/libs```
 ## License
 
-Hound is licensed under the [MIT License](https://github.com/vinhowe/Hound/blob/main/LICENSE)
+Hound is licensed under the [GPLv3 License](https://github.com/vinhowe/Hound/blob/main/LICENSE)
