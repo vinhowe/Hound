@@ -14,17 +14,17 @@ Hound is a Spigot plugin that adds useful navigation and search features using g
 2. Open Git Bash
 
 ### Linux
-1. Install ```git``` using your package manager
+1. Install `git` using your package manager
 
 ### All platforms
 
-Now run these commands in your terminal
+Now run these commands in your terminal:
 ```
 git clone https://github.com/vinhowe/Hound.git
 cd Hound
 ./gradlew build
 ```
-Your build should be in ```/build/libs```
+Your build should be in `/build/libs`.
 ## License
 
-Hound is licensed under the [GPLv3 License](https://github.com/vinhowe/Hound/blob/main/LICENSE)
+Hound is licensed under the [GPLv3 License](https://github.com/vinhowe/Hound/blob/main/LICENSE).
