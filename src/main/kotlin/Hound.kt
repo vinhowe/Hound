@@ -50,14 +50,17 @@ class Hound : JavaPlugin() {
         val manager = PaperCommandManager(this)
         // manager.enableUnstableAPI("brigadier") // ignore this deprecation, it's fine to use
         manager.usePerIssuerLocale(true, true)
-        
+
         val materials = Material.values()
 
         val items = materials.filter(Material::isItem)
         val blocks = materials.filter(Material::isBlock)
 
         manager.commandCompletions.registerStaticCompletion("items", items.map(Material::name).map(String::toLowerCase))
-        manager.commandCompletions.registerStaticCompletion("blocks", blocks.map(Material::name).map(String::toLowerCase))
+        manager.commandCompletions.registerStaticCompletion(
+            "blocks",
+            blocks.map(Material::name).map(String::toLowerCase)
+        )
         manager.commandCompletions.registerStaticCompletion("states", listOf("on", "off"))
 
         manager.commandCompletions.registerCompletion("coords") { context ->
@@ -80,7 +83,10 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(PartialMatchModel::class.java) { context ->
-            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val player = context.player ?: throw InvalidCommandArgument(
+                "&4You must be an in-game player to use this command.",
+                false
+            )
             val input = context.popFirstArg()
 
             if (input == null) {
@@ -108,16 +114,19 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(LiveSearchState::class.java) { context ->
-            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val player = context.player ?: throw InvalidCommandArgument(
+                "&4You must be an in-game player to use this command.",
+                false
+            )
             val input = context.popFirstArg()
 
             val currentState = player.uniqueId in liveSearchSet
             val desiredState = if (input == null) {
                 !currentState
             } else when (input.toLowerCase()) {
-                "on"  -> true
+                "on" -> true
                 "off" -> false
-                else  -> {
+                else -> {
                     throw InvalidCommandArgument("&4Invalid state")
                 }
             }
@@ -126,7 +135,10 @@ class Hound : JavaPlugin() {
         }
 
         manager.commandContexts.registerIssuerAwareContext(Double::class.javaObjectType) { context ->
-            val player = context.player ?: throw InvalidCommandArgument("&4You must be an in-game player to use this command.", false)
+            val player = context.player ?: throw InvalidCommandArgument(
+                "&4You must be an in-game player to use this command.",
+                false
+            )
             val input = context.popFirstArg() ?: return@registerIssuerAwareContext null
 
             if (!input.startsWith("~")) {
@@ -141,10 +153,11 @@ class Hound : JavaPlugin() {
                     }
                 }
 
-                origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toDouble() + (input.drop(1).toDoubleOrNull() ?: 0.0)
+                origin.toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toDouble() + (input.drop(1).toDoubleOrNull()
+                    ?: 0.0)
             }
         }
-        
+
         manager.registerCommand(cmds.BlockSearchCommand(this))
         manager.registerCommand(cmds.ChestSearchCommand(this))
         manager.registerCommand(cmds.LiveChestSearchCommand(this))
