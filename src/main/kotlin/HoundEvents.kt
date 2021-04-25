@@ -20,7 +20,10 @@ class HoundEvents(private val hound: Hound) : Listener {
             return
         }
 
-        if (event.action != Action.RIGHT_CLICK_BLOCK || event.clickedBlock?.state !is BlockInventoryHolder) {
+        if (event.action != Action.RIGHT_CLICK_BLOCK ||
+            (event.clickedBlock?.state !is BlockInventoryHolder &&
+                    event.clickedBlock?.type != Material.ENDER_CHEST)
+        ) {
             return
         }
 

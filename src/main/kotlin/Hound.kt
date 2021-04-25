@@ -7,6 +7,7 @@ import org.bukkit.*
 import org.bukkit.block.Block
 import org.bukkit.block.Container
 import org.bukkit.block.DoubleChest
+import org.bukkit.block.data.type.Chest
 import org.bukkit.craftbukkit.v1_16_R3.CraftWorld
 import org.bukkit.craftbukkit.v1_16_R3.entity.CraftPlayer
 import org.bukkit.craftbukkit.v1_16_R3.util.CraftVector
@@ -344,14 +345,14 @@ class Hound : JavaPlugin() {
 
     private fun searchContainersForExactMatches(
         material: Material,
-        containers: List<Inventory>
+        containers: List<InventoryWithLocation>
     ): ExactMatchingContainersSearchResult {
         var itemCount = 0
-        val matches: MutableSet<Inventory> = mutableSetOf()
+        val matches: MutableSet<InventoryWithLocation> = mutableSetOf()
         var foundNested = false
         containers.forEach { container ->
             var match = false
-            for (item in container) {
+            for (item in container.inventory) {
                 if (item == null) {
                     continue
                 }
@@ -384,22 +385,23 @@ class Hound : JavaPlugin() {
     private fun searchContainersForPartialMatches(
         exactMatchMaterial: Material?,
         partialMatchMaterials: List<Material>,
-        containers: List<Inventory>,
+        containers: List<InventoryWithLocation>,
     ): PartialMatchingContainersSearchResult {
         var exactMatchItemCount = 0
         var partialMatchItemCount = 0
-        val exactMatches: MutableSet<Inventory> = mutableSetOf()
-        val partialMatches: MutableSet<Inventory> = mutableSetOf()
+        val exactMatches: MutableSet<InventoryWithLocation> = mutableSetOf()
+        val partialMatches: MutableSet<InventoryWithLocation> = mutableSetOf()
 
         var foundNested = false
         // it, parent (if nested)
-        val containersStack = containers.map { Pair<Inventory, Inventory?>(it, null) }.toMutableList()
+        val containersStack =
+            containers.map { Pair<InventoryWithLocation, InventoryWithLocation?>(it, null) }.toMutableList()
         while (containersStack.isNotEmpty()) {
             val (container, parent) = containersStack.removeLast()
             // Each matching container is either an exact match or a partial match, but not both
             var containerExactMatch = false
             var containerPartialMatch = false
-            for (item in container) {
+            for (item in container.inventory) {
                 if (item == null) {
                     continue
                 }
@@ -408,7 +410,7 @@ class Hound : JavaPlugin() {
                     getItemStackInnerInventory(item)
 
                 if (innerInventory != null) {
-                    containersStack += Pair(innerInventory, container)
+                    containersStack += Pair(InventoryWithLocation(innerInventory, container.location), container)
                 }
 
                 val targetInventory = parent ?: container
@@ -470,8 +472,10 @@ class Hound : JavaPlugin() {
         return blocks
     }
 
-    private fun containersInRadius(start: Location, radius: Int): List<Inventory> {
-        val containers = mutableListOf<Inventory>()
+    private fun containersInRadius(start: Location, radius: Int, player: Player? = null): List<InventoryWithLocation> {
+        val containers = mutableListOf<InventoryWithLocation>()
+        var closestEnderChestDistance = Double.MAX_VALUE
+        var enderChestMatch: InventoryWithLocation? = null
 
         for (x in -radius..radius) {
             for (y in -radius..radius) {
@@ -480,28 +484,48 @@ class Hound : JavaPlugin() {
                         Location(start.world, start.x + x, start.y + y, start.z + z)
                     val blockState = blockLocation.block.state
 
+                    if (
+                        player != null &&
+                        blockState.type == Material.ENDER_CHEST
+                    ) {
+                        // TODO: Figure out how not to do this distance calculation so much and keep this logic clean
+                        val distance = blockLocation.distance(player.location)
+                        if (enderChestMatch == null || distance < closestEnderChestDistance) {
+                            enderChestMatch = InventoryWithLocation(player.enderChest, blockLocation.block.location)
+                            closestEnderChestDistance = distance
+                            continue
+                        }
+                    }
+
                     if (blockState !is BlockInventoryHolder) {
                         continue
                     }
+                    val storedLocation = blockState.inventory.location ?: blockLocation
 
                     val blockData = blockState.blockData
-                    if (blockData is org.bukkit.block.data.type.Chest && blockData.type != org.bukkit.block.data.type.Chest.Type.SINGLE) {
+                    if (blockData is Chest && blockData.type != Chest.Type.SINGLE) {
                         if (blockState.inventory !is DoubleChestInventory || blockState.inventory.holder !is DoubleChest) {
                             continue
                         }
                         containers.add(
-                            when (blockData.type) {
-                                org.bukkit.block.data.type.Chest.Type.LEFT -> (blockState.inventory as DoubleChestInventory).leftSide
-                                org.bukkit.block.data.type.Chest.Type.RIGHT -> (blockState.inventory as DoubleChestInventory).rightSide
-                                else -> continue
-                            }
+                            InventoryWithLocation(
+                                when (blockData.type) {
+                                    Chest.Type.LEFT -> (blockState.inventory as DoubleChestInventory).leftSide
+                                    Chest.Type.RIGHT -> (blockState.inventory as DoubleChestInventory).rightSide
+                                    else -> continue
+                                }, storedLocation
+                            )
                         )
                         continue
                     }
 
-                    containers.add(blockState.inventory)
+                    containers.add(InventoryWithLocation(blockState.inventory, storedLocation))
                 }
             }
+        }
+
+        if (enderChestMatch != null) {
+            containers.add(enderChestMatch)
         }
 
         return containers
@@ -514,7 +538,7 @@ class Hound : JavaPlugin() {
         radius: Int = searchRadius,
         duration: Double? = highlightDuration.toDouble()
     ): PartialMatchingContainersSearchResult? {
-        val containers = containersInRadius(player.location, radius)
+        val containers = containersInRadius(player.location, radius, player)
         val searchResult = searchContainersForPartialMatches(
             exactMatchMaterial,
             partialMatchMaterials,
@@ -529,7 +553,7 @@ class Hound : JavaPlugin() {
 
         // Limit highlighted matches to 1000 to avoid lagging out client
         val highlightedExactMatchCount = min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.exactMatches.size)
-        searchResult.exactMatches.toList().subList(0, highlightedExactMatchCount).mapNotNull { it.location }.forEach {
+        searchResult.exactMatches.toList().subList(0, highlightedExactMatchCount).map { it.location }.forEach {
             val highlightEntity = shulkerBulletHighlightEntity(player, it)
             createHighlight(highlightEntity, player)
             registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
@@ -537,7 +561,7 @@ class Hound : JavaPlugin() {
         searchResult.partialMatches.toList().subList(
             0,
             min(MAX_VISIBLE_STATIC_HIGHLIGHTS - highlightedExactMatchCount, searchResult.partialMatches.size)
-        ).mapNotNull { it.location }.forEach {
+        ).map { it.location }.forEach {
             val highlightEntity = cubeHighlightEntity(player, it)
             createHighlight(highlightEntity, player)
             registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
@@ -552,7 +576,7 @@ class Hound : JavaPlugin() {
         radius: Int = searchRadius,
         duration: Double? = highlightDuration.toDouble()
     ): ExactMatchingContainersSearchResult? {
-        val containers = containersInRadius(player.location, radius)
+        val containers = containersInRadius(player.location, radius, player)
         val searchResult = searchContainersForExactMatches(material, containers)
 
         if (searchResult.matches.isEmpty()) {
@@ -563,7 +587,7 @@ class Hound : JavaPlugin() {
 
         searchResult.matches.toList().subList(0, min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.matches.size))
             .forEach {
-                val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
+                val highlightEntity = shulkerBulletHighlightEntity(player, it.location)
                 createHighlight(highlightEntity, player)
                 registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
             }
@@ -842,15 +866,21 @@ data class PlayerGuideData(
 sealed class ContainersSearchResult
 
 data class ExactMatchingContainersSearchResult(
-    val matches: Set<Inventory>,
+    val matches: Set<InventoryWithLocation>,
     val itemCount: Int,
     val foundNested: Boolean
 ) : ContainersSearchResult()
 
 data class PartialMatchingContainersSearchResult(
-    val exactMatches: Set<Inventory>,
-    val partialMatches: Set<Inventory>,
+    val exactMatches: Set<InventoryWithLocation>,
+    val partialMatches: Set<InventoryWithLocation>,
     val exactMatchItemCount: Int,
     val partialMatchItemCount: Int,
     val foundNested: Boolean
 ) : ContainersSearchResult()
+
+// While Inventory does sometimes have location, there's no way to set it without reflection as far as I can tell
+data class InventoryWithLocation(
+    val inventory: Inventory,
+    val location: Location
+)
