@@ -27,23 +27,23 @@ repositories {
     maven {
         url = uri("https://papermc.io/repo/repository/maven-public/")
     }
-    
+
     mavenLocal()
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2"
-    
+
     implementation "co.aikar:acf-paper:0.5.0-SNAPSHOT"
-    
+
     compileOnly 'org.spigotmc:spigot:1.16.5-R0.1-SNAPSHOT'
 }
 
 
 shadowJar {
     archiveClassifier.set("")
-    
+
     relocate "co.aikar.commands", "hound.libs.acf"
     relocate "co.aikar.locales", "hound.libs.locales"
 }
@@ -51,7 +51,7 @@ shadowJar {
 tasks.withType(JavaCompile) {
     options.encoding = "UTF-8"
     options.compilerArgs += ["-parameters"]
-    
+
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
 }
