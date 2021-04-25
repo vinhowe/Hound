@@ -5,6 +5,7 @@ import data.PartialMatchModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.bukkit.*
 import org.bukkit.block.Block
+import org.bukkit.block.Container
 import org.bukkit.block.DoubleChest
 import org.bukkit.craftbukkit.v1_16_R3.CraftWorld
 import org.bukkit.craftbukkit.v1_16_R3.entity.CraftPlayer
@@ -13,6 +14,8 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.BlockInventoryHolder
 import org.bukkit.inventory.DoubleChestInventory
 import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.BlockStateMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
 import java.math.RoundingMode
@@ -327,22 +330,47 @@ class Hound : JavaPlugin() {
         return highlightEntity
     }
 
+    private fun getItemStackInnerInventory(itemStack: ItemStack): Inventory? {
+        val itemMeta = itemStack.itemMeta
+        if (itemMeta !is BlockStateMeta) {
+            return null
+        }
+
+        return when (val blockState = itemMeta.blockState) {
+            is Container -> blockState.inventory
+            else -> null
+        }
+    }
+
     private fun searchContainersForExactMatches(
         material: Material,
         containers: List<Inventory>
     ): ExactMatchingContainersSearchResult {
         var itemCount = 0
-        val matches: MutableList<Inventory> = mutableListOf()
+        val matches: MutableSet<Inventory> = mutableSetOf()
+        var foundNested = false
         containers.forEach { container ->
             var match = false
             for (item in container) {
-                if (item == null || item.type != material) {
+                if (item == null) {
                     continue
                 }
 
-                itemCount += item.amount
+                val innerItems =
+                    getItemStackInnerInventory(item)?.contents?.filter { it != null && it.type == material }
 
-                if (match) {
+                var itemOrContentsMatch = false
+                if (!innerItems.isNullOrEmpty()) {
+                    itemCount += innerItems.sumBy { it.amount }
+                    foundNested = true
+                    itemOrContentsMatch = true
+                }
+
+                if (item.type == material) {
+                    itemOrContentsMatch = true
+                }
+
+                if (!itemOrContentsMatch || match) {
                     continue
                 }
 
@@ -350,7 +378,7 @@ class Hound : JavaPlugin() {
                 match = true
             }
         }
-        return ExactMatchingContainersSearchResult(matches, itemCount)
+        return ExactMatchingContainersSearchResult(matches, itemCount, foundNested)
     }
 
     private fun searchContainersForPartialMatches(
@@ -360,10 +388,14 @@ class Hound : JavaPlugin() {
     ): PartialMatchingContainersSearchResult {
         var exactMatchItemCount = 0
         var partialMatchItemCount = 0
-        val exactMatches: MutableList<Inventory> = mutableListOf()
-        val partialMatches: MutableList<Inventory> = mutableListOf()
+        val exactMatches: MutableSet<Inventory> = mutableSetOf()
+        val partialMatches: MutableSet<Inventory> = mutableSetOf()
 
-        containers.forEach { container ->
+        var foundNested = false
+        // it, parent (if nested)
+        val containersStack = containers.map { Pair<Inventory, Inventory?>(it, null) }.toMutableList()
+        while (containersStack.isNotEmpty()) {
+            val (container, parent) = containersStack.removeLast()
             // Each matching container is either an exact match or a partial match, but not both
             var containerExactMatch = false
             var containerPartialMatch = false
@@ -372,13 +404,25 @@ class Hound : JavaPlugin() {
                     continue
                 }
 
+                val innerInventory =
+                    getItemStackInnerInventory(item)
+
+                if (innerInventory != null) {
+                    containersStack += Pair(innerInventory, container)
+                }
+
+                val targetInventory = parent ?: container
+
                 if (item.type == exactMatchMaterial) {
                     exactMatchItemCount += item.amount
                     if (!containerExactMatch) {
-                        exactMatches += container
+                        exactMatches += targetInventory
+                        if (parent != null) {
+                            foundNested = true
+                        }
                         containerExactMatch = true
                         if (containerPartialMatch) {
-                            partialMatches -= container
+                            partialMatches -= targetInventory
                         }
                     }
                     continue
@@ -386,9 +430,12 @@ class Hound : JavaPlugin() {
 
                 if (item.type in partialMatchMaterials) {
                     partialMatchItemCount += item.amount
+                    if (parent != null) {
+                        foundNested = true
+                    }
                     if (!containerPartialMatch && !containerExactMatch) {
                         containerPartialMatch = true
-                        partialMatches += container
+                        partialMatches += targetInventory
                     }
                 }
             }
@@ -398,7 +445,8 @@ class Hound : JavaPlugin() {
             exactMatches,
             partialMatches,
             exactMatchItemCount,
-            partialMatchItemCount
+            partialMatchItemCount,
+            foundNested
         )
     }
 
@@ -481,16 +529,16 @@ class Hound : JavaPlugin() {
 
         // Limit highlighted matches to 1000 to avoid lagging out client
         val highlightedExactMatchCount = min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.exactMatches.size)
-        searchResult.exactMatches.subList(0, highlightedExactMatchCount).forEach {
-            val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
+        searchResult.exactMatches.toList().subList(0, highlightedExactMatchCount).mapNotNull { it.location }.forEach {
+            val highlightEntity = shulkerBulletHighlightEntity(player, it)
             createHighlight(highlightEntity, player)
             registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
         }
-        searchResult.partialMatches.subList(
+        searchResult.partialMatches.toList().subList(
             0,
             min(MAX_VISIBLE_STATIC_HIGHLIGHTS - highlightedExactMatchCount, searchResult.partialMatches.size)
-        ).forEach {
-            val highlightEntity = cubeHighlightEntity(player, it.location!!)
+        ).mapNotNull { it.location }.forEach {
+            val highlightEntity = cubeHighlightEntity(player, it)
             createHighlight(highlightEntity, player)
             registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
         }
@@ -513,11 +561,12 @@ class Hound : JavaPlugin() {
 
         clearStaticHighlightsForPlayer(player)
 
-        searchResult.matches.subList(0, min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.matches.size)).forEach {
-            val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
-            createHighlight(highlightEntity, player)
-            registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
-        }
+        searchResult.matches.toList().subList(0, min(MAX_VISIBLE_STATIC_HIGHLIGHTS, searchResult.matches.size))
+            .forEach {
+                val highlightEntity = shulkerBulletHighlightEntity(player, it.location!!)
+                createHighlight(highlightEntity, player)
+                registerTemporaryStaticHighlightForPlayer(highlightEntity, player, duration)
+            }
 
         return searchResult
     }
@@ -793,13 +842,15 @@ data class PlayerGuideData(
 sealed class ContainersSearchResult
 
 data class ExactMatchingContainersSearchResult(
-    val matches: List<Inventory>,
-    val itemCount: Int
+    val matches: Set<Inventory>,
+    val itemCount: Int,
+    val foundNested: Boolean
 ) : ContainersSearchResult()
 
 data class PartialMatchingContainersSearchResult(
-    val exactMatches: List<Inventory>,
-    val partialMatches: List<Inventory>,
+    val exactMatches: Set<Inventory>,
+    val partialMatches: Set<Inventory>,
     val exactMatchItemCount: Int,
-    val partialMatchItemCount: Int
+    val partialMatchItemCount: Int,
+    val foundNested: Boolean
 ) : ContainersSearchResult()
