@@ -369,6 +369,7 @@ class Hound : JavaPlugin() {
 
                 if (item.type == material) {
                     itemOrContentsMatch = true
+                    itemCount++
                 }
 
                 if (!itemOrContentsMatch || match) {
