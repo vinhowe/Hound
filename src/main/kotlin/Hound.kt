@@ -3,12 +3,19 @@ import co.aikar.commands.PaperCommandManager
 import data.LiveSearchState
 import data.PartialMatchModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import net.minecraft.core.particles.Particles
+import net.minecraft.network.protocol.game.*
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityTypes
+import net.minecraft.world.entity.projectile.EntityEnderSignal
+import net.minecraft.world.entity.projectile.EntityShulkerBullet
+import net.minecraft.world.entity.projectile.EntityWitherSkull
 import org.bukkit.*
 import org.bukkit.block.Block
 import org.bukkit.block.DoubleChest
-import org.bukkit.craftbukkit.v1_16_R3.CraftWorld
-import org.bukkit.craftbukkit.v1_16_R3.entity.CraftPlayer
-import org.bukkit.craftbukkit.v1_16_R3.util.CraftVector
+import org.bukkit.craftbukkit.v1_17_R1.CraftWorld
+import org.bukkit.craftbukkit.v1_17_R1.entity.CraftPlayer
+import org.bukkit.craftbukkit.v1_17_R1.util.CraftVector
 import org.bukkit.entity.Player
 import org.bukkit.inventory.BlockInventoryHolder
 import org.bukkit.inventory.DoubleChestInventory
@@ -177,11 +184,11 @@ class Hound : JavaPlugin() {
         }
 
         if (sendPacket) {
-            val destroyHighlighterPacket =
-                net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(
-                    *staticPlayerHighlightMap[player.uniqueId]!!.map { it.entityId }.toTypedArray().toIntArray()
-                )
-            player.handle.playerConnection.sendPacket(destroyHighlighterPacket)
+            for (i in staticPlayerHighlightMap[player.uniqueId]!!.map { it.entityId }.toTypedArray().toIntArray()) {
+                val destroyHighlighterPacket =
+                    PacketPlayOutEntityDestroy(i)
+                player.handle.b.sendPacket(destroyHighlighterPacket)
+            }
         }
 
         staticPlayerHighlightMap.remove(player.uniqueId)
@@ -235,21 +242,21 @@ class Hound : JavaPlugin() {
     }
 
     private fun destroyHighlight(entityId: Int, player: Player) {
-        val destroyHighlighterPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy(entityId)
-        (player as CraftPlayer).handle.playerConnection.sendPacket(destroyHighlighterPacket)
+        val destroyHighlighterPacket = PacketPlayOutEntityDestroy(entityId)
+        (player as CraftPlayer).handle.b.sendPacket(destroyHighlighterPacket)
     }
 
-    private fun createHighlight(entity: net.minecraft.server.v1_16_R3.Entity, player: Player) {
-        val highlightSpawnPacket = net.minecraft.server.v1_16_R3.PacketPlayOutSpawnEntity(entity)
+    private fun createHighlight(entity: Entity, player: Player) {
+        val highlightSpawnPacket = PacketPlayOutSpawnEntity(entity)
         val highlightMetadataPacket =
-            net.minecraft.server.v1_16_R3.PacketPlayOutEntityMetadata(entity.id, entity.dataWatcher, true)
+            PacketPlayOutEntityMetadata(entity.id, entity.dataWatcher, true)
 
-        (player as CraftPlayer).handle.playerConnection.sendPacket(highlightSpawnPacket)
-        player.handle.playerConnection.sendPacket(highlightMetadataPacket)
+        (player as CraftPlayer).handle.b.sendPacket(highlightSpawnPacket)
+        player.handle.b.sendPacket(highlightMetadataPacket)
     }
 
     private fun registerTemporaryStaticHighlightForPlayer(
-        entity: net.minecraft.server.v1_16_R3.Entity,
+        entity: Entity,
         player: Player,
         duration: Double?
     ) {
@@ -287,17 +294,17 @@ class Hound : JavaPlugin() {
     fun cubeHighlightEntity(
         player: Player,
         location: Location,
-    ): net.minecraft.server.v1_16_R3.Entity {
+    ): net.minecraft.world.entity.Entity {
         val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
-        val highlightEntity = net.minecraft.server.v1_16_R3.EntityWitherSkull(
-            net.minecraft.server.v1_16_R3.EntityTypes.WITHER_SKULL,
+        val highlightEntity = EntityWitherSkull(
+            // bb -> Wither skull
+            EntityTypes.bb,
             (player.world as CraftWorld).handle
         )
         highlightEntity.isInvulnerable = true
         highlightEntity.setPositionRaw(highlightLocation.x, highlightLocation.y, highlightLocation.z)
         highlightEntity.isNoGravity = true
-        // i -> setGlowing
-        highlightEntity.i(true)
+        highlightEntity.setGlowingTag(true)
 
         return highlightEntity
     }
@@ -305,18 +312,17 @@ class Hound : JavaPlugin() {
     fun circleHighlightEntity(
         player: Player,
         location: Location,
-    ): net.minecraft.server.v1_16_R3.Entity {
+    ): Entity {
         val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
         val highlightEntity =
-            net.minecraft.server.v1_16_R3.EntityEnderSignal(
+            EntityEnderSignal(
                 (player.world as CraftWorld).handle,
                 highlightLocation.x,
                 highlightLocation.y,
                 highlightLocation.z,
             )
         highlightEntity.isNoGravity = true
-        // i -> setGlowing
-        highlightEntity.i(true)
+        highlightEntity.setGlowingTag(true)
 
         return highlightEntity
     }
@@ -324,18 +330,18 @@ class Hound : JavaPlugin() {
     fun shulkerBulletHighlightEntity(
         player: Player,
         location: Location,
-    ): net.minecraft.server.v1_16_R3.Entity {
+    ): Entity {
         val highlightLocation = Vector(location.x + 0.5, location.y + 0.25, location.z + 0.5)
         val highlightEntity =
-            net.minecraft.server.v1_16_R3.EntityShulkerBullet(
-                net.minecraft.server.v1_16_R3.EntityTypes.SHULKER_BULLET,
+            EntityShulkerBullet(
+                // az -> EntityShulkerBullet
+                EntityTypes.az,
                 (player.world as CraftWorld).handle
             )
         highlightEntity.setPosition(highlightLocation.x, highlightLocation.y, highlightLocation.z)
         highlightEntity.isNoGravity = true
         highlightEntity.isInvulnerable = true
-        // i -> setGlowing
-        highlightEntity.i(true)
+        highlightEntity.setGlowingTag(true)
 
         return highlightEntity
     }
@@ -715,35 +721,36 @@ class Hound : JavaPlugin() {
                     highlightEntity.setPosition(idealPosition.x, idealPosition.y, idealPosition.z)
                 }
 
-                val velocityPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityVelocity(
+                val velocityPacket = PacketPlayOutEntityVelocity(
                     highlightEntity.id,
                     highlightEntity.mot
                 )
-                (player as CraftPlayer).handle.playerConnection.sendPacket(velocityPacket)
+                (player as CraftPlayer).handle.b.sendPacket(velocityPacket)
                 if (mustTeleport) {
-                    val teleportPacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntityTeleport(highlightEntity)
-                    player.handle.playerConnection.sendPacket(teleportPacket)
+                    val teleportPacket = PacketPlayOutEntityTeleport(highlightEntity)
+                    player.handle.b.sendPacket(teleportPacket)
                 } else {
                     val packetX = ((position.x * 32 - lastPosition.x * 32) * 128).toInt().toShort()
                     val packetY = ((position.y * 32 - lastPosition.y * 32) * 128).toInt().toShort()
                     val packetZ = ((position.z * 32 - lastPosition.z * 32) * 128).toInt().toShort()
 
-                    val movePacket = net.minecraft.server.v1_16_R3.PacketPlayOutEntity.PacketPlayOutRelEntityMove(
+                    val movePacket = PacketPlayOutEntity.PacketPlayOutRelEntityMove(
                         highlightEntity.id,
                         packetX,
                         packetY,
                         packetZ,
                         false
                     )
-                    player.handle.playerConnection.sendPacket(movePacket)
+                    player.handle.b.sendPacket(movePacket)
                 }
 
                 if (position.clone().multiply(Vector(1, 0, 1)).distance(Vector(x, 0.0, z)) < 0.01 && !finished) {
                     finished = true
                     val scheduler = Bukkit.getServer().scheduler
                     val particlesTask = scheduler.scheduleSyncRepeatingTask(this, {
-                        val particlePacket = net.minecraft.server.v1_16_R3.PacketPlayOutWorldParticles(
-                            net.minecraft.server.v1_16_R3.Particles.SOUL_FIRE_FLAME,
+                        val particlePacket = PacketPlayOutWorldParticles(
+                            // D -> Soul fire flame
+                            Particles.D,
                             false,
                             position.x,
                             position.y,
@@ -754,13 +761,14 @@ class Hound : JavaPlugin() {
                             0f,
                             50
                         )
-                        player.handle.playerConnection.sendPacket(particlePacket)
+                        player.handle.b.sendPacket(particlePacket)
                     }, 0, 2)
                     scheduler.scheduleSyncDelayedTask(this, {
                         scheduler.cancelTask(particlesTask)
                         clearGuideForPlayer(player)
-                        val deathParticlesPacket = net.minecraft.server.v1_16_R3.PacketPlayOutWorldParticles(
-                            net.minecraft.server.v1_16_R3.Particles.SOUL_FIRE_FLAME,
+                        val deathParticlesPacket = PacketPlayOutWorldParticles(
+                            // D -> Soul fire flame
+                            Particles.D,
                             false,
                             highlightEntity.positionVector.x,
                             highlightEntity.positionVector.y,
@@ -771,7 +779,7 @@ class Hound : JavaPlugin() {
                             0.008f,
                             40
                         )
-                        player.handle.playerConnection.sendPacket(deathParticlesPacket)
+                        player.handle.b.sendPacket(deathParticlesPacket)
                     }, 100)
                 }
             }, 1, 1
@@ -797,7 +805,7 @@ data class StaticHighlightData(
 data class PlayerGuideData(
     val targetX: Double,
     val targetZ: Double,
-    val highlightEntity: net.minecraft.server.v1_16_R3.Entity,
+    val highlightEntity: Entity,
     val runnableId: Int,
     var restingY: Double?
 )
