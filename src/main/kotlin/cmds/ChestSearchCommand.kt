@@ -43,16 +43,25 @@ class ChestSearchCommand(private val hound: Hound) : BaseCommand() {
     private fun String.plural(count: Int, suffix: String) = if (count == 1) this else "$this$suffix"
 
 
-    private fun exactMatchesResultMessage(displayName: String,
-                                          searchResult: ExactMatchingContainersSearchResult): String {
+    private fun exactMatchesResultMessage(
+        displayName: String,
+        searchResult: ExactMatchingContainersSearchResult
+    ): String {
         val match = "match".plural(searchResult.itemCount, "es")
-        val chest = "chest".plural(searchResult.matches.size, "s")
+        val container = "container".plural(searchResult.matches.size, "s")
 
-        return "§6Found ${searchResult.itemCount} $match for '$displayName' in ${searchResult.matches.size} $chest"
+        return buildString {
+            append("§6Found ${searchResult.itemCount} $match for '$displayName' in ${searchResult.matches.size} $container")
+            if (searchResult.foundNested) {
+                append(" (including at least one match in stored Shulker boxes)")
+            }
+        }
     }
 
-    private fun partialMatchesResultMessage(displayName: String,
-                                            searchResult: PartialMatchingContainersSearchResult): String {
+    private fun partialMatchesResultMessage(
+        displayName: String,
+        searchResult: PartialMatchingContainersSearchResult
+    ): String {
         return buildString {
             append("§6Found ")
 
@@ -75,7 +84,11 @@ class ChestSearchCommand(private val hound: Hound) : BaseCommand() {
                 append("$fuzzyMatchCount partial ${"match".plural(fuzzyMatchCount, "es")}")
             }
 
-            append(" for '$displayName' in $totalChestCount ${"chest".plural(totalChestCount, "s")}")
+            append(" for '$displayName' in $totalChestCount ${"container".plural(totalChestCount, "s")}")
+
+            if (searchResult.foundNested) {
+                append(" (including at least one match in stored Shulker boxes)")
+            }
         }
     }
 
